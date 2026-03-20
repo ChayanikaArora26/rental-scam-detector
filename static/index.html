@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rental Scam Detector — Protect Australian Renters</title>
+  <!-- Apply dark mode before render to avoid flash -->
+  <script>
+    if (localStorage.getItem('darkMode') === 'true') document.documentElement.classList.add('dark');
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+
+    /* Gauge ring animation */
+    .gauge-ring { transition: stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1); }
+
+    /* Page fade-in */
+    @keyframes fadeUp { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:none } }
+    .fade-up { animation: fadeUp .45s ease both; }
+    .stagger-1 { animation-delay:.05s }
+    .stagger-2 { animation-delay:.10s }
+    .stagger-3 { animation-delay:.15s }
+    .stagger-4 { animation-delay:.20s }
+
+    /* Chat panel */
+    @keyframes slideUp { from { opacity:0; transform:translateY(20px) scale(.97) } to { opacity:1; transform:none } }
+    .chat-panel { animation: slideUp .25s ease both; }
+
+    /* Typing dots */
+    @keyframes blink { 0%,80%,100%{ opacity:.2 } 40%{ opacity:1 } }
+    .dot { animation: blink 1.4s infinite both; }
+    .dot:nth-child(2){ animation-delay:.2s }
+    .dot:nth-child(3){ animation-delay:.4s }
+
+    /* Toast */
+    @keyframes toastIn { from { opacity:0; transform:translateX(2rem) } to { opacity:1; transform:none } }
+    .toast-anim { animation: toastIn .3s ease both; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width:6px }
+    ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:3px }
+    .dark ::-webkit-scrollbar-thumb { background:#475569 }
+
+    /* Hero gradient */
+    .hero-bg { background: linear-gradient(135deg,#4338ca 0%,#6d28d9 55%,#7c3aed 100%); }
+
+    /* Print: hide chrome, show content */
+    @media print {
+      .no-print { display:none !important; }
+      body { background:white !important; color:black !important; }
+    }
+  </style>
+</head>
+
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen font-sans antialiased transition-colors duration-200"
+      x-data="app()" x-init="init()" x-cloak>
+
+<!-- ══════════════════════════ NAVBAR ══════════════════════════ -->
+<header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40 shadow-sm no-print">
+  <div class="max-w-6xl mx-auto px-4 h-14 flex items-center gap-2">
+
+    <!-- Logo -->
+    <a href="#" @click.prevent="page='analyse'" class="flex items-center gap-2 font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
+      <span class="text-2xl">🏠</span>
+      <span class="hidden sm:inline text-base">Rental Scam Detector</span>
+    </a>
+
+    <div class="flex-1"></div>
+
+    <!-- Nav tabs (desktop) -->
+    <nav class="hidden md:flex gap-1">
+      <template x-for="tab in tabs" :key="tab.id">
+        <button @click="page = tab.id"
+          :class="page===tab.id ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-semibold' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'"
+          class="px-4 py-1.5 rounded-lg text-sm transition">
+          <span x-text="tab.label"></span>
+        </button>
+      </template>
+    </nav>
+
+    <!-- LLM badge -->
+    <span class="hidden sm:inline text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0"
+      :class="{
+        'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400': llmProvider==='claude',
+        'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400':   llmProvider==='huggingface',
+        'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400':           llmProvider==='rule-based'
+      }"
+      x-text="llmBadge">
+    </span>
+
+    <!-- Dark mode -->
+    <button @click="toggleDark()"
+      class="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition text-lg"
+      :title="darkMode ? 'Switch to light mode' : 'Switch to dark mode'">
+      <span x-text="darkMode ? '☀️' : '🌙'"></span>
+    </button>
+
+    <!-- Mobile hamburger -->
+    <button @click="mobileMenu=!mobileMenu"
+      class="md:hidden w-9 h-9 rounded-lg flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 transition">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+        <path fill-rule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 10z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Mobile dropdown -->
+  <div x-show="mobileMenu" @click.outside="mobileMenu=false"
+       class="md:hidden border-t border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 pb-3 pt-2 flex flex-col gap-1">
+    <template x-for="tab in tabs" :key="tab.id">
+      <button @click="page=tab.id; mobileMenu=false"
+        :class="page===tab.id ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400'"
+        class="w-full text-left px-3 py-2 rounded-lg text-sm transition">
+        <span x-text="tab.label"></span>
+      </button>
+    </template>
+  </div>
+</header>
+
+
+<!-- ══════════════════════ TOAST NOTIFICATIONS ════════════════════ -->
+<div class="fixed top-16 right-4 z-[60] flex flex-col gap-2 no-print" style="max-width:340px;">
+  <template x-for="(t, i) in toasts" :key="t.id">
+    <div class="toast-anim flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-medium border"
+      :class="{
+        'bg-red-50 dark:bg-red-900/40 border-red-200 dark:border-red-700 text-red-800 dark:text-red-300':   t.type==='error',
+        'bg-emerald-50 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-700 text-emerald-800 dark:text-emerald-300': t.type==='success',
+        'bg-blue-50 dark:bg-blue-900/40 border-blue-200 dark:border-blue-700 text-blue-800 dark:text-blue-300': t.type==='info',
+      }">
+      <span x-text="t.type==='error' ? '❌' : t.type==='success' ? '✅' : 'ℹ️'" class="flex-shrink-0"></span>
+      <span class="flex-1" x-text="t.msg"></span>
+      <button @click="toasts.splice(i,1)" class="opacity-50 hover:opacity-100 text-lg leading-none ml-1">×</button>
+    </div>
+  </template>
+</div>
+
+
+<!-- ══════════════════════════ HERO BANNER ═══════════════════════ -->
+<div x-show="page==='analyse' && !result && !loading"
+     class="hero-bg text-white py-14 px-4 no-print">
+  <div class="max-w-4xl mx-auto text-center">
+    <div class="inline-flex items-center gap-2 bg-white/20 rounded-full px-4 py-1.5 text-sm mb-6">
+      <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+      AI-Powered · Free to Use · Australian Law
+    </div>
+    <h1 class="text-4xl font-extrabold mb-4 leading-tight tracking-tight">
+      Protect Yourself from<br>Rental Scams
+    </h1>
+    <p class="text-indigo-100 text-lg mb-8 max-w-2xl mx-auto leading-relaxed">
+      Upload a lease, paste a listing, or drop a Gumtree/Domain URL.
+      Our AI scans it against <strong class="text-white">10,773 real Australian lease clauses</strong>
+      and <strong class="text-white">28 scam patterns</strong> instantly.
+    </p>
+    <div class="flex flex-wrap justify-center gap-3 text-sm">
+      <span class="bg-white/10 border border-white/20 rounded-full px-4 py-2">🔍 28 scam patterns</span>
+      <span class="bg-white/10 border border-white/20 rounded-full px-4 py-2">🧠 510 real AU contracts</span>
+      <span class="bg-white/10 border border-white/20 rounded-full px-4 py-2">⚡ Instant detection</span>
+      <span class="bg-white/10 border border-white/20 rounded-full px-4 py-2">💬 AI chatbot included</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ PAGE: ANALYSE ════════════════════════ -->
+<main x-show="page==='analyse'" class="max-w-4xl mx-auto px-4 py-8 space-y-5">
+
+  <!-- Save results bar -->
+  <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 flex flex-wrap gap-3 items-center no-print">
+    <span class="text-sm font-medium text-slate-500 dark:text-slate-400">💾 Save results:</span>
+    <input x-model="userName" placeholder="Your name"
+      class="border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl px-3 py-1.5 text-sm flex-1 min-w-[130px] focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:text-slate-100" />
+    <input x-model="userEmail" placeholder="your@email.com" type="email"
+      class="border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl px-3 py-1.5 text-sm flex-1 min-w-[170px] focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:text-slate-100" />
+    <span class="text-xs text-slate-400">Leave blank to skip saving</span>
+  </div>
+
+  <!-- Input card -->
+  <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+
+    <!-- Input mode tabs -->
+    <div class="flex border-b border-slate-200 dark:border-slate-700">
+      <button @click="inputMode='file'"
+        :class="inputMode==='file' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+        class="px-5 py-3 text-sm transition flex-1 sm:flex-none">
+        📎 Upload file
+      </button>
+      <button @click="inputMode='text'"
+        :class="inputMode==='text' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+        class="px-5 py-3 text-sm transition flex-1 sm:flex-none">
+        📝 Paste text
+      </button>
+      <button @click="inputMode='url'"
+        :class="inputMode==='url' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+        class="px-5 py-3 text-sm transition flex-1 sm:flex-none">
+        🔗 From URL
+      </button>
+    </div>
+
+    <div class="p-5">
+
+      <!-- File upload -->
+      <div x-show="inputMode==='file'">
+        <div @dragover.prevent="dragging=true" @dragleave="dragging=false"
+             @drop.prevent="handleDrop($event)"
+             :class="dragging ? 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/30' : 'border-slate-200 dark:border-slate-600 hover:border-indigo-300 dark:hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-700/30'"
+             class="border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition"
+             @click="$refs.fileInput.click()">
+          <input type="file" accept=".pdf,.docx" x-ref="fileInput" class="hidden"
+                 @change="handleFileSelect($event)" />
+          <template x-if="!selectedFile">
+            <div>
+              <div class="text-5xl mb-3">📄</div>
+              <p class="text-slate-600 dark:text-slate-300 font-semibold">Drop your PDF or DOCX here</p>
+              <p class="text-slate-400 text-sm mt-1">or click to browse — max 200 MB</p>
+            </div>
+          </template>
+          <template x-if="selectedFile">
+            <div class="flex items-center justify-center gap-3">
+              <span class="text-3xl">📋</span>
+              <span class="font-semibold text-slate-700 dark:text-slate-200" x-text="selectedFile.name"></span>
+              <button @click.stop="selectedFile=null"
+                class="text-slate-400 hover:text-red-500 text-2xl leading-none transition">×</button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Text paste -->
+      <div x-show="inputMode==='text'">
+        <textarea x-model="pastedText" rows="8"
+          placeholder="Paste the rental listing or agreement text here…&#10;&#10;e.g. 'Send $2000 via Western Union to secure this property immediately. The landlord is overseas…'"
+          class="w-full border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl p-4 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400 font-mono leading-relaxed dark:text-slate-100 dark:placeholder-slate-500">
+        </textarea>
+      </div>
+
+      <!-- URL scraper -->
+      <div x-show="inputMode==='url'" class="space-y-3">
+        <div class="flex gap-2">
+          <input x-model="scrapeUrl" type="url"
+            placeholder="https://www.gumtree.com.au/s-ad/... or any listing URL"
+            class="flex-1 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:text-slate-100 dark:placeholder-slate-500" />
+          <button @click="fetchUrl()"
+            :disabled="scrapeLoading || !scrapeUrl.trim()"
+            class="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-50 transition flex items-center gap-2">
+            <template x-if="scrapeLoading">
+              <svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+            </template>
+            <span x-text="scrapeLoading ? 'Fetching…' : '⬇ Fetch'"></span>
+          </button>
+        </div>
+        <div x-show="scrapedText" class="space-y-2">
+          <div class="flex items-center justify-between">
+            <p class="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              ✅ Fetched <span x-text="scrapedText.length.toLocaleString()"></span> characters — ready to analyse
+            </p>
+            <button @click="scrapedText=''; scrapeUrl=''" class="text-xs text-slate-400 hover:text-red-500 transition">Clear</button>
+          </div>
+          <div class="bg-slate-50 dark:bg-slate-700 rounded-xl p-3 text-xs text-slate-500 dark:text-slate-400 font-mono max-h-32 overflow-y-auto" x-text="scrapedText.slice(0,600) + '…'"></div>
+        </div>
+        <div class="text-xs text-slate-400 dark:text-slate-500 space-y-1">
+          <p>Works with: Gumtree · Domain.com.au · RealEstate.com.au · Facebook Marketplace · any public page</p>
+          <p class="text-amber-600 dark:text-amber-400">⚠ Some sites may block automated fetches (e.g. Facebook). Paste text manually if this happens.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analyse button + loading steps -->
+    <div class="px-5 pb-5 space-y-3">
+      <button @click="runAnalysis()"
+        :disabled="loading"
+        class="w-full py-3.5 rounded-xl font-bold text-white text-base transition
+               bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700
+               disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg
+               flex items-center justify-center gap-2">
+        <template x-if="loading">
+          <svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+          </svg>
+        </template>
+        <span x-text="loading ? 'Analysing…' : '🔍 Analyse for Scams'"></span>
+      </button>
+
+      <!-- Step progress -->
+      <div x-show="loading" class="flex items-center justify-between gap-1 px-1">
+        <template x-for="(step, i) in loadingSteps" :key="i">
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <div class="w-full h-1.5 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700">
+              <div class="h-full rounded-full transition-all duration-700"
+                :class="loadingStep > i ? 'bg-emerald-500 w-full' : loadingStep === i ? 'bg-indigo-500 animate-pulse w-3/4' : 'w-0'"
+                style="transition: width 0.7s ease;"></div>
+            </div>
+            <span class="text-xs text-slate-400 dark:text-slate-500 text-center leading-tight hidden sm:block" x-text="step"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────── RESULTS ─────────────── -->
+  <div x-show="result" class="space-y-5 fade-up">
+
+    <!-- 4 stat cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <!-- Risk score -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl border p-4 text-center fade-up stagger-1"
+        :class="{
+          'border-red-200 dark:border-red-800':     riskLevel==='HIGH',
+          'border-amber-200 dark:border-amber-800':  riskLevel==='MEDIUM',
+          'border-emerald-200 dark:border-emerald-800': riskLevel==='LOW'
+        }">
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Risk Score</p>
+        <p class="text-3xl font-extrabold"
+          :class="{
+            'text-red-600': riskLevel==='HIGH',
+            'text-amber-600': riskLevel==='MEDIUM',
+            'text-emerald-600': riskLevel==='LOW'
+          }"
+          x-text="result ? result.combined_risk + '%' : '—'"></p>
+        <p class="text-xs mt-1 font-semibold uppercase tracking-wide"
+          :class="{
+            'text-red-500': riskLevel==='HIGH',
+            'text-amber-500': riskLevel==='MEDIUM',
+            'text-emerald-500': riskLevel==='LOW'
+          }"
+          x-text="riskLevel"></p>
+      </div>
+      <!-- Red flags -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 text-center fade-up stagger-2">
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Red Flags</p>
+        <p class="text-3xl font-extrabold text-red-600" x-text="result ? result.n_flags : '—'"></p>
+        <p class="text-xs text-slate-400 mt-1">patterns triggered</p>
+      </div>
+      <!-- Chunks -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 text-center fade-up stagger-3">
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Anomalous Chunks</p>
+        <p class="text-3xl font-extrabold text-indigo-600"
+          x-text="result ? result.n_anomalous + '/' + result.total_chunks : '—'"></p>
+        <p class="text-xs text-slate-400 mt-1">semantic outliers</p>
+      </div>
+      <!-- AI provider -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 text-center fade-up stagger-4">
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Analysed by</p>
+        <p class="text-2xl font-extrabold"
+          :class="{
+            'text-emerald-600': result && result.llm && result.llm.provider==='claude',
+            'text-orange-600':  result && result.llm && result.llm.provider==='huggingface',
+            'text-slate-500':   result && result.llm && result.llm.provider==='rule-based'
+          }"
+          x-text="result && result.llm ? {claude:'Claude AI', huggingface:'Mistral AI', 'rule-based':'Rule'}[result.llm.provider] || '—' : '—'"></p>
+        <p class="text-xs text-slate-400 mt-1">AI engine</p>
+      </div>
+    </div>
+
+    <!-- Verdict banner + gauge -->
+    <div class="bg-white dark:bg-slate-800 rounded-2xl border overflow-hidden fade-up"
+         :class="{
+           'border-red-300 dark:border-red-700':    riskLevel==='HIGH',
+           'border-amber-300 dark:border-amber-700': riskLevel==='MEDIUM',
+           'border-emerald-300 dark:border-emerald-700': riskLevel==='LOW'
+         }">
+      <div class="p-2 text-center text-white text-xs font-bold uppercase tracking-wider"
+        :class="{
+          'bg-red-500 dark:bg-red-700':     riskLevel==='HIGH',
+          'bg-amber-500 dark:bg-amber-600': riskLevel==='MEDIUM',
+          'bg-emerald-500 dark:bg-emerald-600': riskLevel==='LOW'
+        }">
+        <span x-text="riskLevel + ' RISK'"></span>
+        <span x-show="result && result.filename" class="ml-2 opacity-75">— <span x-text="result ? result.filename : ''"></span></span>
+      </div>
+      <div class="p-5 flex flex-col sm:flex-row items-center gap-6">
+        <!-- Gauge -->
+        <div class="relative flex-shrink-0 w-32 h-32">
+          <svg viewBox="0 0 120 120" class="w-full h-full -rotate-90">
+            <circle cx="60" cy="60" r="50" fill="none" stroke="#e2e8f0" stroke-width="12" class="dark:stroke-slate-700"/>
+            <circle cx="60" cy="60" r="50" fill="none" stroke-width="12"
+              :stroke="gaugeColor" stroke-linecap="round"
+              stroke-dasharray="314" :stroke-dashoffset="gaugeDash" class="gauge-ring"/>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <span class="text-2xl font-extrabold" x-text="result ? result.combined_risk + '%' : ''"></span>
+            <span class="text-xs font-semibold uppercase tracking-wide"
+              :class="{'text-red-600':riskLevel==='HIGH','text-amber-600':riskLevel==='MEDIUM','text-emerald-600':riskLevel==='LOW'}"
+              x-text="riskLevel"></span>
+          </div>
+        </div>
+        <!-- Verdict + breakdown bar -->
+        <div class="flex-1 text-center sm:text-left w-full">
+          <h2 class="text-xl font-bold dark:text-slate-100" x-text="result ? result.verdict : ''"></h2>
+          <!-- Risk breakdown bar -->
+          <div class="mt-4 space-y-2">
+            <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Risk breakdown</p>
+            <div class="flex gap-2 items-center">
+              <span class="text-xs text-slate-500 w-28 text-right shrink-0">Pattern detection</span>
+              <div class="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                <div class="h-full bg-red-500 rounded-full transition-all duration-1000"
+                  :style="'width:' + Math.min(100, (result ? result.n_flags * 20 : 0)) + '%'"></div>
+              </div>
+              <span class="text-xs text-slate-500 w-8" x-text="result ? Math.min(100, result.n_flags * 20) + '%' : ''"></span>
+            </div>
+            <div class="flex gap-2 items-center">
+              <span class="text-xs text-slate-500 w-28 text-right shrink-0">Anomaly score</span>
+              <div class="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                <div class="h-full bg-violet-500 rounded-full transition-all duration-1000"
+                  :style="'width:' + (result ? Math.round(result.anomaly_pct) : 0) + '%'"></div>
+              </div>
+              <span class="text-xs text-slate-500 w-8" x-text="result ? Math.round(result.anomaly_pct) + '%' : ''"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Two-column: Red flags | AI analysis -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+      <!-- Red flags -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden fade-up">
+        <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 class="font-semibold text-slate-700 dark:text-slate-200">⚠ Red Flags</h3>
+          <span class="text-xs px-2.5 py-1 rounded-full font-semibold"
+            :class="result && result.n_flags > 0 ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400'"
+            x-text="result ? result.n_flags + ' triggered' : ''"></span>
+        </div>
+        <div class="divide-y divide-slate-100 dark:divide-slate-700 max-h-80 overflow-y-auto">
+          <template x-if="result && result.red_flags.length === 0">
+            <p class="p-5 text-sm text-emerald-600 dark:text-emerald-400">✅ No red-flag patterns detected.</p>
+          </template>
+          <template x-for="(rf, i) in (result ? result.red_flags : [])" :key="i">
+            <div class="p-4">
+              <button @click="rf._open = !rf._open"
+                class="w-full text-left flex items-start gap-2 group">
+                <span class="text-red-500 mt-0.5 flex-shrink-0">⚠</span>
+                <span class="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-red-600 transition flex-1" x-text="rf.flag"></span>
+                <span class="text-slate-300 text-xs" x-text="rf._open ? '▲' : '▼'"></span>
+              </button>
+              <div x-show="rf._open" class="mt-2 ml-6">
+                <code class="text-xs bg-slate-100 dark:bg-slate-700 rounded-lg px-3 py-2 block text-slate-600 dark:text-slate-300 break-all"
+                  x-text="'… ' + rf.snippet + ' …'"></code>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- AI Analysis -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden fade-up">
+        <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+          <h3 class="font-semibold text-slate-700 dark:text-slate-200">🤖 AI Analysis</h3>
+          <span class="text-xs px-2.5 py-1 rounded-full font-medium"
+            :class="{
+              'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400': result && result.llm && result.llm.provider==='claude',
+              'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400':   result && result.llm && result.llm.provider==='huggingface',
+              'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400':   result && result.llm && result.llm.provider==='rule-based'
+            }"
+            x-text="result && result.llm ? providerLabel(result.llm.provider) : ''">
+          </span>
+        </div>
+        <div class="p-5 space-y-4 max-h-80 overflow-y-auto text-sm">
+          <p class="text-slate-700 dark:text-slate-300 leading-relaxed" x-text="result && result.llm ? result.llm.summary : ''"></p>
+          <template x-if="result && result.llm && result.llm.clause_advice && result.llm.clause_advice.length">
+            <div>
+              <p class="font-semibold text-slate-600 dark:text-slate-300 mb-2">Clause notes:</p>
+              <ul class="space-y-1.5">
+                <template x-for="(note, i) in result.llm.clause_advice" :key="i">
+                  <li class="flex gap-2 text-slate-600 dark:text-slate-400">
+                    <span class="text-amber-500 flex-shrink-0">•</span>
+                    <span x-text="note"></span>
+                  </li>
+                </template>
+              </ul>
+            </div>
+          </template>
+          <template x-if="result && result.llm && result.llm.user_action">
+            <div class="bg-indigo-50 dark:bg-indigo-900/30 rounded-xl p-3 border border-indigo-100 dark:border-indigo-800">
+              <p class="font-semibold text-indigo-700 dark:text-indigo-300 mb-2">What to do next:</p>
+              <template x-for="(line, i) in (result.llm.user_action || '').split('\n').filter(l => l.trim())" :key="i">
+                <p class="text-indigo-700 dark:text-indigo-300 text-sm" x-text="line"></p>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="flex flex-wrap gap-3 justify-center fade-up no-print">
+      <button @click="copyReport()"
+        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border-2 border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-sm font-semibold transition">
+        📋 Copy Report
+      </button>
+      <button @click="window.print()"
+        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-semibold transition">
+        🖨 Save PDF
+      </button>
+      <button @click="openChat(true)"
+        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-sm font-semibold shadow-md transition">
+        💬 Ask the AI about this document
+      </button>
+    </div>
+
+    <!-- Chunk score table -->
+    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden fade-up">
+      <button @click="showChunks = !showChunks"
+        class="w-full px-5 py-3.5 flex items-center justify-between text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+        <span>📊 Detailed chunk scores (<span x-text="result ? result.details.length : 0"></span> chunks analysed)</span>
+        <span class="text-slate-400 text-xs" x-text="showChunks ? '▲ collapse' : '▼ expand'"></span>
+      </button>
+      <div x-show="showChunks" class="overflow-x-auto border-t border-slate-100 dark:border-slate-700">
+        <table class="w-full text-xs">
+          <thead class="bg-slate-50 dark:bg-slate-700/50">
+            <tr>
+              <th class="px-4 py-2 text-left text-slate-500 dark:text-slate-400 font-semibold w-16">Score</th>
+              <th class="px-4 py-2 text-left text-slate-500 dark:text-slate-400 font-semibold w-24">Status</th>
+              <th class="px-4 py-2 text-left text-slate-500 dark:text-slate-400 font-semibold">Chunk text</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            <template x-for="(row, i) in (result ? result.details : [])" :key="i">
+              <tr :class="row.anomalous ? 'bg-red-50 dark:bg-red-900/20' : ''">
+                <td class="px-4 py-2 font-mono font-bold"
+                  :class="row.best_score < 0.3 ? 'text-red-600' : row.best_score < 0.5 ? 'text-amber-600' : 'text-emerald-600'"
+                  x-text="row.best_score.toFixed(3)"></td>
+                <td class="px-4 py-2">
+                  <span x-show="row.anomalous" class="text-red-600 dark:text-red-400 font-semibold text-xs bg-red-100 dark:bg-red-900/40 px-2 py-0.5 rounded-full">anomalous</span>
+                  <span x-show="!row.anomalous" class="text-slate-400 dark:text-slate-500">ok</span>
+                </td>
+                <td class="px-4 py-2 text-slate-600 dark:text-slate-400 max-w-lg truncate" x-text="row.chunk"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+</main>
+
+
+<!-- ═══════════════════════ PAGE: HISTORY ════════════════════════ -->
+<main x-show="page==='history'" class="max-w-4xl mx-auto px-4 py-8 space-y-5">
+  <div class="flex items-center justify-between">
+    <h1 class="text-2xl font-bold">📋 My Analysis History</h1>
+  </div>
+
+  <div class="flex flex-wrap gap-3">
+    <input x-model="historyEmail" :placeholder="userEmail || 'your@email.com'" type="email"
+      class="border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 rounded-xl px-4 py-2 text-sm flex-1 min-w-[200px] focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:text-slate-100" />
+    <button @click="loadHistory()" :disabled="historyLoading"
+      class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold disabled:opacity-50 transition">
+      <span x-text="historyLoading ? 'Loading…' : 'Load history'"></span>
+    </button>
+  </div>
+
+  <!-- Verdict filter chips -->
+  <div x-show="historyData && historyData.length > 0" class="flex gap-2 flex-wrap">
+    <template x-for="f in ['All','HIGH','MEDIUM','LOW']" :key="f">
+      <button @click="historyFilter=f"
+        :class="historyFilter===f ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600'"
+        class="px-3 py-1.5 rounded-full text-xs font-semibold transition hover:shadow-sm">
+        <span x-text="f==='All' ? 'All' : f==='HIGH' ? '🔴 High' : f==='MEDIUM' ? '🟡 Medium' : '🟢 Low'"></span>
+      </button>
+    </template>
+    <span class="text-xs text-slate-400 self-center ml-2"
+      x-text="filteredHistory.length + ' result' + (filteredHistory.length !== 1 ? 's' : '')"></span>
+  </div>
+
+  <template x-if="historyData && historyData.length === 0">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-12 text-center">
+      <div class="text-5xl mb-3">📭</div>
+      <p class="text-slate-500 dark:text-slate-400">No analyses found for this email yet.</p>
+    </div>
+  </template>
+
+  <div class="space-y-3">
+    <template x-for="(h, i) in filteredHistory" :key="h.id">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl border dark:border-slate-700 overflow-hidden transition"
+        :class="{
+          'border-red-200 dark:border-red-800':    h.verdict.includes('HIGH'),
+          'border-amber-200 dark:border-amber-800': h.verdict.includes('MEDIUM'),
+          'border-emerald-200 dark:border-emerald-800': !h.verdict.includes('HIGH') && !h.verdict.includes('MEDIUM')
+        }">
+
+        <!-- Left colored bar -->
+        <div class="flex">
+          <div class="w-1.5 flex-shrink-0 rounded-l-2xl"
+            :class="{
+              'bg-red-500':    h.verdict.includes('HIGH'),
+              'bg-amber-500':  h.verdict.includes('MEDIUM'),
+              'bg-emerald-500': !h.verdict.includes('HIGH') && !h.verdict.includes('MEDIUM')
+            }"></div>
+          <div class="flex-1">
+            <button @click="h._open = !h._open"
+              class="w-full px-4 py-4 flex flex-wrap gap-3 items-center text-left hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
+              <span class="text-xs text-slate-400 font-mono w-32 flex-shrink-0"
+                x-text="h.created_at.slice(0,16).replace('T',' ')"></span>
+              <span class="text-sm text-slate-700 dark:text-slate-200 flex-1 min-w-[120px] font-medium"
+                x-text="h.filename || 'pasted text'"></span>
+              <span class="text-xs px-2.5 py-1 rounded-full font-semibold"
+                :class="{
+                  'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400':      h.verdict.includes('HIGH'),
+                  'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400':  h.verdict.includes('MEDIUM'),
+                  'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400': !h.verdict.includes('HIGH') && !h.verdict.includes('MEDIUM')
+                }"
+                x-text="h.verdict.includes('HIGH') ? '🔴 HIGH' : h.verdict.includes('MEDIUM') ? '🟡 MEDIUM' : '🟢 LOW'">
+              </span>
+              <span class="text-sm font-bold w-12 text-right dark:text-slate-200" x-text="h.combined_risk + '%'"></span>
+              <span class="text-xs text-slate-400 w-14 text-right" x-text="h.n_flags + ' flags'"></span>
+              <span class="text-slate-300 dark:text-slate-600 text-sm" x-text="h._open ? '▲' : '▼'"></span>
+            </button>
+
+            <div x-show="h._open" class="border-t border-slate-100 dark:border-slate-700 px-5 py-4 space-y-3">
+              <template x-if="h.llm_summary">
+                <p class="text-sm text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-700 rounded-xl p-3" x-text="h.llm_summary"></p>
+              </template>
+              <template x-if="h.red_flags && h.red_flags.length">
+                <div>
+                  <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">RED FLAGS:</p>
+                  <ul class="space-y-1.5">
+                    <template x-for="(rf, j) in h.red_flags" :key="j">
+                      <li class="text-sm flex gap-2 items-start">
+                        <span class="text-red-500 flex-shrink-0 mt-0.5">⚠</span>
+                        <span class="text-slate-700 dark:text-slate-300 font-medium" x-text="rf.flag"></span>
+                        <code class="text-xs text-slate-400 ml-auto truncate max-w-xs" x-text="rf.snippet"></code>
+                      </li>
+                    </template>
+                  </ul>
+                </div>
+              </template>
+              <template x-if="!h.red_flags || h.red_flags.length === 0">
+                <p class="text-sm text-emerald-600 dark:text-emerald-400">✅ No red flags in this analysis.</p>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+</main>
+
+
+<!-- ════════════════════════ PAGE: ABOUT ═════════════════════════ -->
+<main x-show="page==='about'" class="max-w-3xl mx-auto px-4 py-8">
+  <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-8 space-y-6">
+    <div>
+      <h1 class="text-2xl font-bold">About Rental Scam Detector</h1>
+      <p class="text-slate-500 dark:text-slate-400 mt-1">Protecting Australian renters from fraudulent listings and agreements.</p>
+    </div>
+
+    <div>
+      <h2 class="text-base font-semibold mb-3">How it works</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-700/30">
+          <p class="font-semibold text-slate-700 dark:text-slate-200 mb-1">🔍 Layer 1 — Pattern detection</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">28 regex rules covering payment scams (Western Union, crypto), overseas landlord claims, WhatsApp-only contact, illegal lease terms, and pressure tactics.</p>
+        </div>
+        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-700/30">
+          <p class="font-semibold text-slate-700 dark:text-slate-200 mb-1">🧠 Layer 2 — Semantic anomaly</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Sentence-transformer embeddings (all-MiniLM-L6-v2) compare each clause against 10,773 real legal clauses from 510 CUAD contracts + NSW tenancy forms.</p>
+        </div>
+        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-700/30">
+          <p class="font-semibold text-slate-700 dark:text-slate-200 mb-1">🤖 AI Explanation</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">LLM generates a plain-English summary with clause-level advice. Priority: Claude AI → Mistral-7B (free) → rule-based fallback.</p>
+        </div>
+        <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-slate-50 dark:bg-slate-700/30">
+          <p class="font-semibold text-slate-700 dark:text-slate-200 mb-1">💬 Chatbot</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Multi-turn assistant powered by the same LLM. Ask general Australian tenancy law questions or query your specific document after analysis.</p>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="text-base font-semibold mb-3">Reference data</h2>
+      <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden text-sm">
+        <table class="w-full">
+          <thead class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-4 py-2 text-left font-medium text-slate-500 dark:text-slate-400">Source</th>
+              <th class="px-4 py-2 text-left font-medium text-slate-500 dark:text-slate-400">Size</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            <tr><td class="px-4 py-3 text-slate-700 dark:text-slate-300">CUAD — Contract Understanding Atticus Dataset</td><td class="px-4 py-3 text-slate-500">510 contracts · 10,667 clauses</td></tr>
+            <tr><td class="px-4 py-3 text-slate-700 dark:text-slate-300">NSW Residential Tenancy Agreement</td><td class="px-4 py-3 text-slate-500">106 chunks</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="text-base font-semibold mb-3">AI provider setup</h2>
+      <div class="space-y-2 text-sm text-slate-500 dark:text-slate-400">
+        <div class="flex items-center gap-3 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-3">
+          <span class="text-xl">✨</span>
+          <div><strong class="text-emerald-700 dark:text-emerald-400">Claude Haiku</strong> — <code class="bg-emerald-100 dark:bg-emerald-900/40 px-1 rounded">export ANTHROPIC_API_KEY=sk-ant-...</code></div>
+        </div>
+        <div class="flex items-center gap-3 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-3">
+          <span class="text-xl">🤗</span>
+          <div><strong class="text-orange-700 dark:text-orange-400">Mistral-7B (free)</strong> — <code class="bg-orange-100 dark:bg-orange-900/40 px-1 rounded">export HF_TOKEN=hf_...</code> from huggingface.co</div>
+        </div>
+        <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-xl p-3">
+          <span class="text-xl">📋</span>
+          <div><strong class="text-slate-600 dark:text-slate-300">Rule-based fallback</strong> — works with no API key</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="border-t border-slate-100 dark:border-slate-700 pt-4 text-xs text-slate-400 dark:text-slate-500">
+      <p><strong>Disclaimer:</strong> This tool flags suspicious patterns — it cannot guarantee safety. Always inspect the property in person and consult NSW Fair Trading or your state's tenancy authority before signing.</p>
+      <p class="mt-2">Tech stack: Python · FastAPI · sentence-transformers · scikit-learn · SQLite · Tailwind CSS · Alpine.js</p>
+    </div>
+  </div>
+</main>
+
+
+<!-- ════════════════ FLOATING CHAT BUTTON ════════════════════ -->
+<button @click="openChat(false)" x-show="!chatOpen"
+  class="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center
+         text-2xl text-white transition hover:scale-110 active:scale-95 no-print"
+  style="background: linear-gradient(135deg,#4f46e5,#7c3aed);"
+  title="Ask the AI a question">
+  💬
+  <span x-show="chatUnread"
+    class="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white"></span>
+</button>
+
+
+<!-- ════════════════════════ CHAT PANEL ═════════════════════════ -->
+<div x-show="chatOpen"
+     class="chat-panel fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-1.5rem)]
+            bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700
+            flex flex-col no-print"
+     style="height:520px;">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between px-4 py-3 rounded-t-2xl"
+    style="background: linear-gradient(135deg,#4338ca,#6d28d9);">
+    <div class="flex items-center gap-2 text-white">
+      <span class="text-xl">🏠</span>
+      <div>
+        <p class="font-semibold text-sm leading-tight">Rental Assistant</p>
+        <p class="text-indigo-200 text-xs"
+          x-text="llmProvider==='claude' ? 'Claude AI' : llmProvider==='huggingface' ? 'Mistral AI · Free' : 'Rule-based mode'">
+        </p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button @click="chatMessages=[]; chatContext=null" class="text-indigo-200 hover:text-white transition text-sm" title="Clear chat">🗑</button>
+      <button @click="chatOpen=false" class="text-indigo-200 hover:text-white text-xl leading-none transition" title="Close">×</button>
+    </div>
+  </div>
+
+  <!-- Context pill -->
+  <div x-show="chatContext" class="px-3 pt-2.5">
+    <div class="flex items-center gap-2 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-700 rounded-xl px-3 py-1.5 text-xs">
+      <span class="text-indigo-500">📋</span>
+      <span class="text-indigo-700 dark:text-indigo-300 font-medium">Document context loaded —</span>
+      <span class="text-indigo-500 dark:text-indigo-400 truncate" x-text="chatContext ? chatContext.verdict : ''"></span>
+      <button @click="chatContext=null" class="ml-auto text-slate-400 hover:text-red-400 text-base leading-none">×</button>
+    </div>
+  </div>
+
+  <!-- Messages -->
+  <div x-ref="chatMessages" class="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+
+    <!-- Empty state -->
+    <template x-if="chatMessages.length === 0">
+      <div class="text-center py-6 space-y-3">
+        <div class="text-4xl">🏠</div>
+        <p class="text-slate-600 dark:text-slate-300 font-semibold text-sm">Australian Tenancy Assistant</p>
+        <p class="text-slate-400 dark:text-slate-500 text-xs leading-relaxed">
+          Ask anything about bonds, repairs, evictions,<br>rental scams, or your tenant rights.
+        </p>
+        <div class="space-y-2 mt-3">
+          <template x-for="q in starterQuestions" :key="q">
+            <button @click="sendStarter(q)"
+              class="w-full text-left text-xs bg-slate-50 dark:bg-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30
+                     border border-slate-200 dark:border-slate-600 hover:border-indigo-200 dark:hover:border-indigo-700
+                     rounded-xl px-3 py-2 text-slate-600 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 transition">
+              <span x-text="q"></span>
+            </button>
+          </template>
+        </div>
+      </div>
+    </template>
+
+    <!-- Bubbles -->
+    <template x-for="(msg, i) in chatMessages" :key="i">
+      <div :class="msg.role==='user' ? 'flex justify-end' : 'flex justify-start'">
+        <div class="max-w-[85%] px-4 py-2.5 text-sm leading-relaxed break-words rounded-2xl"
+          :class="msg.role==='user'
+            ? 'text-white rounded-tr-sm'
+            : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-tl-sm'"
+          :style="msg.role==='user' ? 'background:linear-gradient(135deg,#4f46e5,#7c3aed)' : ''">
+          <span x-html="mdToHtml(msg.content)"></span>
+        </div>
+      </div>
+    </template>
+
+    <!-- Typing -->
+    <div x-show="chatLoading" class="flex justify-start">
+      <div class="bg-slate-100 dark:bg-slate-700 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1">
+        <span class="dot w-2 h-2 bg-slate-400 rounded-full inline-block"></span>
+        <span class="dot w-2 h-2 bg-slate-400 rounded-full inline-block"></span>
+        <span class="dot w-2 h-2 bg-slate-400 rounded-full inline-block"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Input -->
+  <div class="px-3 pb-3 pt-2 border-t border-slate-100 dark:border-slate-700">
+    <div class="flex gap-2 items-end">
+      <textarea x-model="chatInput" x-ref="chatInput"
+        @keydown.enter.prevent="handleChatEnter($event)" :disabled="chatLoading"
+        placeholder="Ask about bonds, repairs, scams…" rows="1"
+        class="flex-1 resize-none border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700
+               rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400
+               disabled:opacity-50 leading-snug dark:text-slate-100 dark:placeholder-slate-500"
+        style="max-height:100px;overflow-y:auto;"
+        @input="autoResizeChat($el)">
+      </textarea>
+      <button @click="sendChat()" :disabled="chatLoading || !chatInput.trim()"
+        class="flex-shrink-0 w-10 h-10 rounded-xl text-white flex items-center justify-center transition
+               disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90"
+        style="background:linear-gradient(135deg,#4f46e5,#7c3aed);">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5">
+          <path d="M3.105 2.289a.75.75 0 00-.826.95l1.414 4.925A1.5 1.5 0 005.135 9.25h6.115a.75.75 0 010 1.5H5.135a1.5 1.5 0 00-1.442 1.086l-1.414 4.926a.75.75 0 00.826.95 28.896 28.896 0 0015.293-7.154.75.75 0 000-1.115A28.897 28.897 0 003.105 2.289z"/>
+        </svg>
+      </button>
+    </div>
+    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1.5 text-center">Enter to send · Shift+Enter for newline</p>
+  </div>
+</div>
+
+
+<!-- ════════════════════ ALPINE.JS APP ══════════════════════════ -->
+<script>
+function app() {
+  return {
+    // Navigation
+    page: 'analyse',
+    mobileMenu: false,
+    tabs: [
+      { id: 'analyse', label: '🔍 Analyse' },
+      { id: 'history', label: '📋 History' },
+      { id: 'about',   label: 'ℹ About'   },
+    ],
+
+    // Dark mode
+    darkMode: localStorage.getItem('darkMode') === 'true',
+
+    // User
+    userName:  '',
+    userEmail: '',
+
+    // Input
+    inputMode:    'file',
+    selectedFile: null,
+    pastedText:   '',
+    dragging:     false,
+
+    // URL scraper
+    scrapeUrl:    '',
+    scrapeLoading: false,
+    scrapedText:  '',
+
+    // Analysis
+    loading:     false,
+    loadingStep: 0,
+    loadingSteps: ['Extract text', 'Pattern scan', 'Embeddings', 'AI explain'],
+    result:      null,
+    showChunks:  false,
+
+    // History
+    historyEmail:   '',
+    historyLoading: false,
+    historyData:    null,
+    historyFilter:  'All',
+
+    // LLM provider
+    llmProvider: 'rule-based',
+
+    // Toasts
+    toasts: [],
+    _toastId: 0,
+
+    // Chat
+    chatOpen:     false,
+    chatLoading:  false,
+    chatUnread:   false,
+    chatMessages: [],
+    chatInput:    '',
+    chatContext:  null,
+    starterQuestions: [
+      'What is the maximum bond in Australia?',
+      'How much notice does my landlord need to enter?',
+      'What are the signs of a rental scam?',
+      'How do I dispute an unfair rent increase?',
+    ],
+
+    // ── Init ──────────────────────────────────────────────────────
+    async init() {
+      document.documentElement.classList.toggle('dark', this.darkMode);
+      try {
+        const res = await fetch('/api/status');
+        const d = await res.json();
+        this.llmProvider = d.llm_provider;
+      } catch {}
+    },
+
+    // ── Dark mode ─────────────────────────────────────────────────
+    toggleDark() {
+      this.darkMode = !this.darkMode;
+      localStorage.setItem('darkMode', this.darkMode);
+      document.documentElement.classList.toggle('dark', this.darkMode);
+    },
+
+    // ── Toasts ────────────────────────────────────────────────────
+    toast(msg, type = 'info', ms = 5000) {
+      const id = ++this._toastId;
+      this.toasts.push({ id, msg, type });
+      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, ms);
+    },
+
+    // ── Computed ──────────────────────────────────────────────────
+    get llmBadge() {
+      return { claude: '✨ Claude AI', huggingface: '🤗 Mistral AI', 'rule-based': '📋 Rule-based' }[this.llmProvider] || this.llmProvider;
+    },
+    get riskLevel() {
+      if (!this.result) return 'LOW';
+      const v = this.result.verdict.toUpperCase();
+      if (v.includes('HIGH'))   return 'HIGH';
+      if (v.includes('MEDIUM')) return 'MEDIUM';
+      return 'LOW';
+    },
+    get gaugeColor() {
+      return { HIGH: '#ef4444', MEDIUM: '#f59e0b', LOW: '#10b981' }[this.riskLevel];
+    },
+    get gaugeDash() {
+      const pct = this.result ? Math.min(this.result.combined_risk, 100) / 100 : 0;
+      return 314 * (1 - pct);
+    },
+    get filteredHistory() {
+      if (!this.historyData) return [];
+      if (this.historyFilter === 'All') return this.historyData;
+      return this.historyData.filter(h => h.verdict.includes(this.historyFilter));
+    },
+
+    providerLabel(p) {
+      return { claude: '✨ Claude AI', huggingface: '🤗 Mistral AI', 'rule-based': '📋 Rule-based' }[p] || p;
+    },
+
+    // ── File handling ─────────────────────────────────────────────
+    handleDrop(e) {
+      this.dragging = false;
+      const f = e.dataTransfer.files[0];
+      if (f) this.selectedFile = f;
+    },
+    handleFileSelect(e) {
+      this.selectedFile = e.target.files[0] || null;
+    },
+
+    // ── URL scraper ───────────────────────────────────────────────
+    async fetchUrl() {
+      if (!this.scrapeUrl.trim()) return;
+      this.scrapeLoading = true;
+      this.scrapedText   = '';
+      try {
+        const res = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: this.scrapeUrl.trim() }),
+        });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.detail || 'Fetch failed');
+        this.scrapedText = d.text;
+        this.toast('Fetched ' + d.chars.toLocaleString() + ' characters from the page.', 'success');
+      } catch (err) {
+        this.toast(err.message, 'error');
+      } finally {
+        this.scrapeLoading = false;
+      }
+    },
+
+    // ── Run analysis ──────────────────────────────────────────────
+    async runAnalysis() {
+      this.result    = null;
+      this.showChunks = false;
+      this.loadingStep = 0;
+
+      const hasFile    = this.inputMode === 'file' && this.selectedFile;
+      const hasText    = this.inputMode === 'text' && this.pastedText.trim();
+      const hasUrl     = this.inputMode === 'url' && this.scrapedText.trim();
+
+      if (!hasFile && !hasText && !hasUrl) {
+        this.toast('Please upload a file, paste some text, or fetch a URL first.', 'error');
+        return;
+      }
+
+      this.loading = true;
+
+      const fd = new FormData();
+      if (hasFile) { fd.append('file', this.selectedFile); }
+      else if (hasUrl) { fd.append('text', this.scrapedText); }
+      else { fd.append('text', this.pastedText); }
+      fd.append('name',  this.userName);
+      fd.append('email', this.userEmail);
+
+      // Advance loading steps
+      const stepTimer = setInterval(() => {
+        if (this.loadingStep < this.loadingSteps.length - 1) this.loadingStep++;
+      }, 2500);
+
+      try {
+        const res  = await fetch('/api/analyse', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Analysis failed');
+
+        data.red_flags = (data.red_flags || []).map(rf => ({ ...rf, _open: false }));
+        this.result     = data;
+        this.loadingStep = this.loadingSteps.length;
+
+        const lvl = data.verdict.includes('HIGH') ? 'HIGH RISK' : data.verdict.includes('MEDIUM') ? 'MEDIUM RISK' : 'LOW RISK';
+        this.toast('Analysis complete — ' + lvl + ' (' + data.combined_risk + '%)', data.combined_risk >= 40 ? 'error' : data.combined_risk >= 20 ? 'info' : 'success');
+      } catch (err) {
+        this.toast(err.message, 'error');
+      } finally {
+        clearInterval(stepTimer);
+        this.loading = false;
+      }
+    },
+
+    // ── Copy report ───────────────────────────────────────────────
+    copyReport() {
+      if (!this.result) return;
+      const r = this.result;
+      const flags = r.red_flags.map(f => '  ⚠ ' + f.flag).join('\n') || '  None';
+      const summary = r.llm ? r.llm.summary : '';
+      const action  = r.llm ? r.llm.user_action : '';
+      const text = [
+        '═══════════════════════════════════════════',
+        '  RENTAL SCAM ANALYSIS REPORT',
+        '  Generated by Rental Scam Detector',
+        '═══════════════════════════════════════════',
+        '',
+        'Verdict:    ' + r.verdict,
+        'Risk Score: ' + r.combined_risk + '%',
+        'Red Flags:  ' + r.n_flags + ' triggered',
+        'Anomalous:  ' + r.n_anomalous + ' of ' + r.total_chunks + ' chunks',
+        r.filename ? 'File:       ' + r.filename : '',
+        '',
+        '─── RED FLAGS ───────────────────────────',
+        flags,
+        '',
+        '─── AI SUMMARY ──────────────────────────',
+        summary,
+        '',
+        '─── RECOMMENDED ACTIONS ─────────────────',
+        action,
+        '',
+        '═══════════════════════════════════════════',
+      ].filter(l => l !== undefined).join('\n');
+
+      navigator.clipboard.writeText(text)
+        .then(() => this.toast('Report copied to clipboard!', 'success'))
+        .catch(() => this.toast('Could not copy — try selecting text manually.', 'error'));
+    },
+
+    // ── Load history ──────────────────────────────────────────────
+    async loadHistory() {
+      const email = this.historyEmail.trim() || this.userEmail.trim();
+      if (!email) { this.toast('Enter an email to load history.', 'error'); return; }
+      this.historyLoading = true;
+      this.historyData    = null;
+      this.historyFilter  = 'All';
+      try {
+        const res  = await fetch('/api/history/' + encodeURIComponent(email));
+        const data = await res.json();
+        this.historyData = (data.analyses || []).map(h => ({ ...h, _open: false }));
+        this.toast('Loaded ' + this.historyData.length + ' analysis record(s).', 'success');
+      } catch (err) {
+        this.toast(err.message, 'error');
+      } finally {
+        this.historyLoading = false;
+      }
+    },
+
+    // ── Chat ──────────────────────────────────────────────────────
+    openChat(withContext) {
+      this.chatOpen   = true;
+      this.chatUnread = false;
+      if (withContext && this.result) {
+        this.chatContext = this.result;
+        if (this.chatMessages.length === 0) {
+          this.chatMessages.push({
+            role: 'assistant',
+            content:
+              `I've reviewed the document analysis.\n\n` +
+              `**Verdict:** ${this.result.verdict}\n` +
+              `**Risk score:** ${this.result.combined_risk}%   |   **Red flags:** ${this.result.n_flags}\n\n` +
+              `What would you like to know about this document or your tenancy rights?`,
+          });
+        }
+      }
+      this.$nextTick(() => {
+        this.scrollChatToBottom();
+        this.$refs.chatInput && this.$refs.chatInput.focus();
+      });
+    },
+
+    handleChatEnter(e) {
+      if (e.shiftKey) return;
+      this.sendChat();
+    },
+
+    autoResizeChat(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+    },
+
+    async sendChat() {
+      const msg = this.chatInput.trim();
+      if (!msg || this.chatLoading) return;
+      this.chatInput = '';
+      this.$nextTick(() => { if (this.$refs.chatInput) this.$refs.chatInput.style.height = 'auto'; });
+
+      this.chatMessages.push({ role: 'user', content: msg });
+      this.chatLoading = true;
+      this.scrollChatToBottom();
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: this.chatMessages, context: this.chatContext }),
+        });
+        const data = await res.json();
+        this.chatMessages.push({ role: 'assistant', content: data.reply });
+        if (!this.chatOpen) this.chatUnread = true;
+      } catch {
+        this.chatMessages.push({ role: 'assistant', content: 'Sorry, something went wrong. Please try again.' });
+      } finally {
+        this.chatLoading = false;
+        this.$nextTick(() => this.scrollChatToBottom());
+      }
+    },
+
+    async sendStarter(q) { this.chatInput = q; await this.sendChat(); },
+
+    scrollChatToBottom() {
+      const el = this.$refs.chatMessages;
+      if (el) el.scrollTop = el.scrollHeight;
+    },
+
+    // Minimal markdown → safe HTML
+    mdToHtml(text) {
+      return (text || '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code class="bg-black/10 rounded px-1 font-mono text-xs">$1</code>')
+        .replace(/\n/g, '<br>');
+    },
+  };
+}
+</script>
+
+</body>
+</html>

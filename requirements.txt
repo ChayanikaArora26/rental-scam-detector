@@ -1,0 +1,25 @@
+# Web framework
+fastapi>=0.111
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+
+# AI / ML
+sentence-transformers>=2.7
+scikit-learn>=1.5
+numpy>=1.26
+pandas>=2.0
+nltk>=3.9
+
+# LLM providers (both optional — app works without them)
+anthropic>=0.30
+huggingface-hub>=0.23
+
+# Document parsing
+pdfplumber>=0.11
+python-docx>=1.1
+
+# URL scraper
+requests>=2.32
+beautifulsoup4>=4.12
+
+# Utilities

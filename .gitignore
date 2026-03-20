@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Large data files — downloaded at runtime via download_data.py
+data/cuad/
+data/processed/
+data/*.db
+
+# Keep the AU tenancy forms in git (small PDFs)
+!data/au_tenancy_forms/
+
+# Streamlit (legacy)
+.streamlit/
+
+# OS
+.DS_Store
