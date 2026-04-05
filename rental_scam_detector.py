@@ -195,85 +195,99 @@ def load_forms_and_chunk(forms_dir: pathlib.Path) -> list[dict]:
 # ──────────────────────────────────────────────────────────────
 # Red-flag pattern library
 # ──────────────────────────────────────────────────────────────
-RED_FLAGS: list[tuple[str, str]] = [
+# Tuples of (regex, label, severity_score, severity_label)
+# severity_score drives the risk percentage:
+#   50 = CRITICAL  — near-certain scam, one flag alone = HIGH RISK
+#   30 = HIGH      — strong scam indicator
+#   15 = MEDIUM    — concerning, warrants caution
+#   8  = LOW       — worth noting but not alarming alone
+#   3  = MINIMAL   — very mild, common in legitimate listings
+RED_FLAGS: list[tuple[str, str, int, str]] = [
     # ── Payment scams ────────────────────────────────────────
     (r"\bwestern\s+union\b",
-     "requests Western Union transfer"),
+     "requests Western Union transfer", 50, "CRITICAL"),
     (r"\bmoneygram\b",
-     "requests MoneyGram transfer"),
-    (r"\bwire\s+transfer\b",
-     "requests wire transfer"),
+     "requests MoneyGram transfer", 50, "CRITICAL"),
     (r"\bcrypto(?:currency)?\b|\bbitcoin\b|\bethereum\b|\busdt\b",
-     "requests cryptocurrency payment"),
+     "requests cryptocurrency payment", 50, "CRITICAL"),
     (r"\bgift\s+card\b",
-     "requests gift card payment"),
+     "requests gift card payment", 50, "CRITICAL"),
+    (r"\bwire\s+transfer\b",
+     "requests wire transfer", 30, "HIGH"),
     (r"\bsend\s+(cash|money|funds|payment|the\s+bond)\b",
-     "requests cash/money transfer"),
-    (r"\bdirect\s+deposit.*\bsecure\b|\beft.*\bsecure\b",
-     "requests direct deposit to 'secure' property"),
+     "requests cash/money transfer", 30, "HIGH"),
     (r"\bfull\s+(bond|deposit|month).{0,20}before\b",
-     "large upfront payment demanded before viewing"),
+     "large upfront payment demanded before viewing", 30, "HIGH"),
     (r"\bdeposit\b.{0,30}\bbefore\s+viewing\b",
-     "deposit required before inspection"),
+     "deposit required before inspection", 15, "MEDIUM"),
+    (r"\bdirect\s+deposit.*\bsecure\b|\beft.*\bsecure\b",
+     "requests direct deposit to 'secure' property", 15, "MEDIUM"),
 
     # ── Landlord unavailability ───────────────────────────────
-    (r"\boverseas\b.*\blandlord\b|\blandlord\b.*\boverseas\b",
-     "landlord claims to be overseas"),
-    (r"\bcurrently\s+(overseas|abroad|out\s+of\s+(the\s+)?country|interstate)\b",
-     "owner claims to be away / out of country"),
-    (r"\bcannot\s+meet\b|\bunable\s+to\s+meet\b|\bno\s+meetup\b",
-     "landlord refuses to meet in person"),
-    (r"\bno\s+inspection\b|\bcannot\s+inspect\b|\bviewing\s+not\s+(possible|available)\b",
-     "inspection/viewing denied"),
     (r"\bkeys\s+(will\s+be\s+)?sent\s+by\s+(post|mail)\b|\bkeys.*\bdelivered\b",
-     "keys sent by post / delivered without meeting"),
+     "keys sent by post / delivered without meeting", 30, "HIGH"),
+    (r"\bno\s+inspection\b|\bcannot\s+inspect\b|\bviewing\s+not\s+(possible|available)\b",
+     "inspection/viewing denied", 30, "HIGH"),
+    (r"\boverseas\b.*\blandlord\b|\blandlord\b.*\boverseas\b",
+     "landlord claims to be overseas", 15, "MEDIUM"),
+    (r"\bcurrently\s+(overseas|abroad|out\s+of\s+(the\s+)?country|interstate)\b",
+     "owner claims to be away / out of country", 8, "LOW"),
+    (r"\bcannot\s+meet\b|\bunable\s+to\s+meet\b|\bno\s+meetup\b",
+     "landlord refuses to meet in person", 15, "MEDIUM"),
     (r"\bwhatsapp\s+only\b|\bcontact.*\bwhatsapp\b|\bvia\s+whatsapp\b",
-     "WhatsApp-only contact (avoids traceable calls)"),
+     "WhatsApp-only contact (avoids traceable calls)", 15, "MEDIUM"),
 
     # ── Rights waiver / illegal terms ────────────────────────
     (r"\bwaives?\s+all\s+rights\b",
-     "tenant waives all rights (illegal in AU)"),
+     "tenant waives all rights (illegal in AU)", 50, "CRITICAL"),
     (r"\bnon.?refundable\b.*\ball\s+circumstances\b",
-     "non-refundable under all circumstances (illegal)"),
+     "non-refundable under all circumstances (illegal)", 30, "HIGH"),
     (r"\benter.*without.*notice\b|\bno\s+notice.*entry\b",
-     "landlord entry without notice (illegal in AU)"),
+     "landlord entry without notice (illegal in AU)", 30, "HIGH"),
     (r"\bincrease.*\b(20|25|30|40|50)\s*%\b",
-     "excessive rent increase clause"),
+     "excessive rent increase clause", 15, "MEDIUM"),
     (r"\bno\s+pets\b.*\bno\s+guests\b|\bno\s+guests\b.*\bno\s+pets\b",
-     "overly restrictive lifestyle controls"),
+     "overly restrictive lifestyle controls", 8, "LOW"),
 
     # ── Classic scam language ────────────────────────────────
     (r"\bgod.?fearing\b|\btrust\s+in\s+god\b",
-     "religious appeals ('God-fearing') — classic scam signal"),
+     "religious appeals ('God-fearing') — classic scam signal", 50, "CRITICAL"),
     (r"\bmissionary\b|\bchurch\s+work\b",
-     "missionary/church-work story — common scam pretext"),
-    (r"\bkeys.*\bairbnb\b|\bairbnb.*\bkeys\b",
-     "subletting via Airbnb without owner knowledge"),
+     "missionary/church-work story — common scam pretext", 30, "HIGH"),
     (r"\bmanagement\s+company\s+will\b|\bagent\s+will\s+deliver\b",
-     "fictitious management company delivering keys"),
+     "fictitious management company delivering keys", 30, "HIGH"),
+    (r"\bkeys.*\bairbnb\b|\bairbnb.*\bkeys\b",
+     "subletting via Airbnb without owner knowledge", 8, "LOW"),
 
     # ── Pressure tactics ─────────────────────────────────────
     (r"\bimmediately\b.*\bsecure\b|\bsecure\b.*\bimmediately\b",
-     "urgency pressure to secure property"),
+     "urgency pressure to secure property", 8, "LOW"),
     (r"\blimited\s+time\b|\bact\s+now\b|\bfirst\s+come\s+first\s+served\b",
-     "high-pressure time limit"),
-    (r"\bno\s+questions\s+asked\b",
-     "no-questions-asked clause"),
+     "high-pressure time limit", 8, "LOW"),
     (r"\bmany\s+(applicants|interested|enquiries)\b",
-     "artificial scarcity / fake competition pressure"),
+     "artificial scarcity / fake competition pressure", 8, "LOW"),
+    (r"\bno\s+questions\s+asked\b",
+     "no-questions-asked clause", 3, "MINIMAL"),
 ]
 
 
 def check_red_flags(text: str) -> list[dict]:
-    """Return list of triggered red flags with matched snippet."""
+    """Return list of triggered red flags with matched snippet, severity score and label."""
     hits = []
     text_lower = text.lower()
-    for pattern, label in RED_FLAGS:
+    for pattern, label, severity, severity_label in RED_FLAGS:
         m = re.search(pattern, text_lower)
         if m:
             start = max(0, m.start() - 30)
             end   = min(len(text), m.end() + 30)
-            hits.append({"flag": label, "snippet": text[start:end].strip()})
+            hits.append({
+                "flag":           label,
+                "snippet":        text[start:end].strip(),
+                "severity":       severity,
+                "severity_label": severity_label,
+            })
+    # Sort by severity descending so most critical flags appear first
+    hits.sort(key=lambda x: x["severity"], reverse=True)
     return hits
 
 
@@ -342,34 +356,43 @@ class RentalScamDetector:
         df     = self.score_chunks(chunks)
 
         # Layer 1: red flags
-        red_flags = check_red_flags(text)
-        n_flags   = len(red_flags)
+        red_flags  = check_red_flags(text)
+        n_flags    = len(red_flags)
+        flag_score = sum(rf["severity"] for rf in red_flags)
 
         # Layer 2: anomalous chunks
         n_anomalous = int(df["anomalous"].sum()) if not df.empty else 0
         anomaly_pct = round(100 * n_anomalous / max(len(df), 1), 1)
 
-        # Combined risk score (flags carry more weight)
-        combined_risk = min(100, n_flags * 20 + anomaly_pct)
+        # Combined risk: severity-weighted flags dominate; anomaly adds up to 20 pts
+        combined_risk = min(100, flag_score + round(anomaly_pct * 0.4))
 
-        if combined_risk >= 40 or n_flags >= 2:
+        # Verdict thresholds (tuned to new severity scale):
+        #   CRITICAL flag alone = 50 pts → HIGH
+        #   HIGH flag alone     = 30 pts → MEDIUM
+        #   MEDIUM flag alone   = 15 pts → MEDIUM
+        #   LOW / MINIMAL flags = 3-8 pts → LOW unless combined
+        has_critical = any(rf["severity_label"] == "CRITICAL" for rf in red_flags)
+        if has_critical or combined_risk >= 45:
             verdict = "HIGH RISK — strong scam indicators detected"
-        elif combined_risk >= 25 and n_flags >= 2:
+        elif combined_risk >= 15:
             verdict = "MEDIUM RISK — some suspicious elements"
-        elif anomaly_pct >= 30 and n_flags == 0:
-            verdict = "MEDIUM RISK — some suspicious elements"
+        elif anomaly_pct >= 30:
+            verdict = "MEDIUM RISK — unusual clauses detected"
         else:
             verdict = "LOW RISK — looks similar to standard AU leases"
 
         return {
             "verdict":       verdict,
             "combined_risk": combined_risk,
+            "flag_score":    min(100, flag_score),
             "red_flags":     red_flags,
             "n_flags":       n_flags,
             "total_chunks":  len(df),
             "n_anomalous":   n_anomalous,
             "anomaly_pct":   anomaly_pct,
             "details":       df,
+            "doc_text":      text,
         }
 
 

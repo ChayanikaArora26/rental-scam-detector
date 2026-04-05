@@ -166,6 +166,7 @@ async def analyse(
     return {
         "verdict":       result["verdict"],
         "combined_risk": result["combined_risk"],
+        "flag_score":    result["flag_score"],
         "n_flags":       result["n_flags"],
         "n_anomalous":   result["n_anomalous"],
         "total_chunks":  result["total_chunks"],
@@ -215,7 +216,7 @@ async def scrape_url(req: ScrapeRequest):
         return "\n".join(lines)[:40000]
 
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         text = await loop.run_in_executor(None, _fetch, url)
         if len(text) < 100:
             raise HTTPException(422, "Page returned too little text — it may require a login or block bots.")

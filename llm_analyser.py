@@ -57,28 +57,52 @@ HF_MODEL     = "mistralai/Mistral-7B-Instruct-v0.3"
 # ── Shared prompt builder ────────────────────────────────────────
 def _build_prompt(result: dict) -> str:
     flags_text = "\n".join(
-        f"- {rf['flag']}: «{rf['snippet']}»"
+        f"- [{rf.get('severity_label','?')}] {rf['flag']}\n  Exact text found: «{rf['snippet']}»"
         for rf in result.get("red_flags", [])
     ) or "None"
 
-    return f"""You are an Australian tenancy law assistant helping a renter spot scams.
+    anomalous_section = ""
+    details = result.get("details")
+    if details is not None and not details.empty:
+        bad = details[details["anomalous"]]["chunk"].tolist()[:5]
+        if bad:
+            bullet_chunks = "\n".join("- " + c[:200] for c in bad)
+            anomalous_section = "Top anomalous clauses:\n" + bullet_chunks
 
-Analyse this rental listing / agreement:
+    doc_excerpt = result.get("doc_text", "")[:3000]
+    verdict     = result['verdict']
+    risk        = result['combined_risk']
+    n_flags     = result['n_flags']
+    n_anomalous = result['n_anomalous']
+    total       = result['total_chunks']
 
-VERDICT: {result['verdict']}
-COMBINED RISK SCORE: {result['combined_risk']}%
-RED FLAGS TRIGGERED ({result['n_flags']}):
+    return f"""You are an expert Australian tenancy lawyer reviewing a rental document for a student renter.
+
+DOCUMENT EXCERPT (first 3000 chars):
+\"\"\"
+{doc_excerpt}
+\"\"\"
+
+AUTOMATED SCAN RESULTS:
+- Overall verdict: {verdict}
+- Risk score: {risk}%
+- Red flags found ({n_flags}):
 {flags_text}
-ANOMALOUS CLAUSES (chunks unlike any real AU lease): {result['n_anomalous']} of {result['total_chunks']}
+- Anomalous clauses (not found in any real AU lease): {n_anomalous} of {total} chunks
+{anomalous_section}
 
-Respond in exactly this JSON format (no markdown fences, no extra text):
+Using BOTH the document text and the scan results above, respond in exactly this JSON format (no markdown fences, no extra text):
 {{
-  "summary": "<2-3 sentences explaining the overall risk in plain English>",
-  "clause_advice": ["<one sentence per red flag explaining why it is suspicious>"],
-  "user_action": "<3 concrete bullet points the renter should do next, separated by newlines>"
+  "summary": "<2-3 sentences: what is this document, what is the overall risk, and the single most important thing the renter needs to know>",
+  "clause_advice": ["<for each red flag: explain in plain English WHY it is suspicious and what harm it could cause the renter>"],
+  "user_action": "<exactly 3 bullet points starting with bullet character of concrete next steps the renter should take>"
 }}
 
-Be direct and assume the reader is a student renter unfamiliar with Australian tenancy law."""
+Rules:
+- Be specific and reference the actual flagged text, not generic advice
+- Each clause_advice item must explain the real-world risk to the renter
+- If no red flags, say so clearly and note any other concerns from the document
+- Assume the reader has never rented before and does not know Australian law"""
 
 
 # ── Main public function ─────────────────────────────────────────
@@ -147,12 +171,12 @@ def _fallback(result: dict) -> dict:
     risk = result["combined_risk"]
     n    = result["n_flags"]
 
-    if risk >= 40 or n >= 2:
+    if risk >= 40:
         summary = (
             f"This listing has {n} serious warning sign(s) and a risk score of {risk}%. "
             "It shows multiple patterns strongly associated with rental fraud in Australia."
         )
-    elif risk >= 20 or n == 1:
+    elif risk >= 20:
         summary = (
             f"This listing has {n} warning sign(s) and a risk score of {risk}%. "
             "Proceed with caution and verify the landlord's identity before paying anything."

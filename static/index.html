@@ -45,7 +45,7 @@
     .dark ::-webkit-scrollbar-thumb { background:#475569 }
 
     /* Hero gradient */
-    .hero-bg { background: linear-gradient(135deg,#4338ca 0%,#6d28d9 55%,#7c3aed 100%); }
+    .hero-bg { background: linear-gradient(160deg,#0f172a 0%,#1a3353 60%,#1e3a5f 100%); }
 
     /* Print: hide chrome, show content */
     @media print {
@@ -64,8 +64,8 @@
 
     <!-- Logo -->
     <a href="#" @click.prevent="page='analyse'" class="flex items-center gap-2 font-bold text-indigo-600 dark:text-indigo-400 flex-shrink-0">
-      <span class="text-2xl">🏠</span>
-      <span class="hidden sm:inline text-base">Rental Scam Detector</span>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
+      <span class="hidden sm:inline text-base tracking-tight">LeaseSafe</span>
     </a>
 
     <div class="flex-1"></div>
@@ -140,25 +140,20 @@
 
 <!-- ══════════════════════════ HERO BANNER ═══════════════════════ -->
 <div x-show="page==='analyse' && !result && !loading"
-     class="hero-bg text-white py-14 px-4 no-print">
-  <div class="max-w-4xl mx-auto text-center">
-    <div class="inline-flex items-center gap-2 bg-white/20 rounded-full px-4 py-1.5 text-sm mb-6">
-      <span class="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-      AI-Powered · Free to Use · Australian Law
-    </div>
-    <h1 class="text-4xl font-extrabold mb-4 leading-tight tracking-tight">
-      Protect Yourself from<br>Rental Scams
+     class="hero-bg text-white py-16 px-4 no-print">
+  <div class="max-w-3xl mx-auto">
+    <p class="text-blue-300 text-sm font-medium uppercase tracking-widest mb-4">For Australian renters</p>
+    <h1 class="text-4xl sm:text-5xl font-extrabold mb-5 leading-tight tracking-tight">
+      Check your lease<br>before you sign.
     </h1>
-    <p class="text-indigo-100 text-lg mb-8 max-w-2xl mx-auto leading-relaxed">
-      Upload a lease, paste a listing, or drop a Gumtree/Domain URL.
-      Our AI scans it against <strong class="text-white">10,773 real Australian lease clauses</strong>
-      and <strong class="text-white">28 scam patterns</strong> instantly.
+    <p class="text-slate-300 text-lg mb-10 max-w-xl leading-relaxed">
+      Paste a rental listing or upload your agreement. We'll flag scam patterns,
+      unusual clauses, and anything that doesn't match a real Australian lease — in seconds.
     </p>
-    <div class="flex flex-wrap justify-center gap-3 text-sm">
-      <span class="bg-white/10 border border-white/20 rounded-full px-4 py-2">🔍 28 scam patterns</span>
-      <span class="bg-white/10 border border-white/20 rounded-full px-4 py-2">🧠 510 real AU contracts</span>
-      <span class="bg-white/10 border border-white/20 rounded-full px-4 py-2">⚡ Instant detection</span>
-      <span class="bg-white/10 border border-white/20 rounded-full px-4 py-2">💬 AI chatbot included</span>
+    <div class="flex flex-wrap gap-6 text-sm text-slate-400">
+      <span class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>28 scam patterns checked</span>
+      <span class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>10,667 real AU lease clauses as reference</span>
+      <span class="flex items-center gap-2"><span class="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>PDF, DOCX, or paste text</span>
     </div>
   </div>
 </div>
@@ -169,7 +164,7 @@
 
   <!-- Save results bar -->
   <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 flex flex-wrap gap-3 items-center no-print">
-    <span class="text-sm font-medium text-slate-500 dark:text-slate-400">💾 Save results:</span>
+    <span class="text-sm font-medium text-slate-500 dark:text-slate-400">Save results to history:</span>
     <input x-model="userName" placeholder="Your name"
       class="border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-xl px-3 py-1.5 text-sm flex-1 min-w-[130px] focus:outline-none focus:ring-2 focus:ring-indigo-400 dark:text-slate-100" />
     <input x-model="userEmail" placeholder="your@email.com" type="email"
@@ -185,17 +180,17 @@
       <button @click="inputMode='file'"
         :class="inputMode==='file' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'"
         class="px-5 py-3 text-sm transition flex-1 sm:flex-none">
-        📎 Upload file
+        Upload file
       </button>
       <button @click="inputMode='text'"
         :class="inputMode==='text' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'"
         class="px-5 py-3 text-sm transition flex-1 sm:flex-none">
-        📝 Paste text
+        Paste text
       </button>
       <button @click="inputMode='url'"
         :class="inputMode==='url' ? 'border-b-2 border-indigo-500 text-indigo-600 dark:text-indigo-400 font-medium bg-indigo-50/50 dark:bg-indigo-900/20' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'"
         class="px-5 py-3 text-sm transition flex-1 sm:flex-none">
-        🔗 From URL
+        From URL
       </button>
     </div>
 
@@ -212,9 +207,9 @@
                  @change="handleFileSelect($event)" />
           <template x-if="!selectedFile">
             <div>
-              <div class="text-5xl mb-3">📄</div>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="w-10 h-10 mx-auto mb-3 text-slate-300 dark:text-slate-600"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12H9m1.5-12H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" /></svg>
               <p class="text-slate-600 dark:text-slate-300 font-semibold">Drop your PDF or DOCX here</p>
-              <p class="text-slate-400 text-sm mt-1">or click to browse — max 200 MB</p>
+              <p class="text-slate-400 text-sm mt-1">or click to browse</p>
             </div>
           </template>
           <template x-if="selectedFile">
@@ -284,7 +279,7 @@
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
           </svg>
         </template>
-        <span x-text="loading ? 'Analysing…' : '🔍 Analyse for Scams'"></span>
+        <span x-text="loading ? 'Analysing…' : 'Run analysis'"></span>
       </button>
 
       <!-- Step progress -->
@@ -346,15 +341,15 @@
       </div>
       <!-- AI provider -->
       <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 text-center fade-up stagger-4">
-        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Analysed by</p>
-        <p class="text-2xl font-extrabold"
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">AI Engine</p>
+        <p class="text-lg font-bold leading-snug"
           :class="{
             'text-emerald-600': result && result.llm && result.llm.provider==='claude',
             'text-orange-600':  result && result.llm && result.llm.provider==='huggingface',
             'text-slate-500':   result && result.llm && result.llm.provider==='rule-based'
           }"
-          x-text="result && result.llm ? {claude:'Claude AI', huggingface:'Mistral AI', 'rule-based':'Rule'}[result.llm.provider] || '—' : '—'"></p>
-        <p class="text-xs text-slate-400 mt-1">AI engine</p>
+          x-text="result && result.llm ? {claude:'Claude AI', huggingface:'Mistral', 'rule-based':'Rule-based'}[result.llm.provider] || '—' : '—'"></p>
+        <p class="text-xs text-slate-400 mt-1" x-text="result && result.llm && result.llm.provider !== 'rule-based' ? 'AI-powered' : 'No API key set'"></p>
       </div>
     </div>
 
@@ -400,9 +395,9 @@
               <span class="text-xs text-slate-500 w-28 text-right shrink-0">Pattern detection</span>
               <div class="flex-1 bg-slate-100 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
                 <div class="h-full bg-red-500 rounded-full transition-all duration-1000"
-                  :style="'width:' + Math.min(100, (result ? result.n_flags * 20 : 0)) + '%'"></div>
+                  :style="'width:' + Math.min(100, (result ? result.flag_score || 0 : 0)) + '%'"></div>
               </div>
-              <span class="text-xs text-slate-500 w-8" x-text="result ? Math.min(100, result.n_flags * 20) + '%' : ''"></span>
+              <span class="text-xs text-slate-500 w-8" x-text="result ? Math.min(100, result.flag_score || 0) + '%' : ''"></span>
             </div>
             <div class="flex gap-2 items-center">
               <span class="text-xs text-slate-500 w-28 text-right shrink-0">Anomaly score</span>
@@ -423,14 +418,14 @@
       <!-- Red flags -->
       <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden fade-up">
         <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-          <h3 class="font-semibold text-slate-700 dark:text-slate-200">⚠ Red Flags</h3>
+          <h3 class="font-semibold text-slate-700 dark:text-slate-200">Red Flags</h3>
           <span class="text-xs px-2.5 py-1 rounded-full font-semibold"
             :class="result && result.n_flags > 0 ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400'"
             x-text="result ? result.n_flags + ' triggered' : ''"></span>
         </div>
         <div class="divide-y divide-slate-100 dark:divide-slate-700 max-h-80 overflow-y-auto">
           <template x-if="result && result.red_flags.length === 0">
-            <p class="p-5 text-sm text-emerald-600 dark:text-emerald-400">✅ No red-flag patterns detected.</p>
+            <p class="p-5 text-sm text-emerald-600 dark:text-emerald-400">No red-flag patterns detected.</p>
           </template>
           <template x-for="(rf, i) in (result ? result.red_flags : [])" :key="i">
             <div class="p-4">
@@ -438,11 +433,20 @@
                 class="w-full text-left flex items-start gap-2 group">
                 <span class="text-red-500 mt-0.5 flex-shrink-0">⚠</span>
                 <span class="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-red-600 transition flex-1" x-text="rf.flag"></span>
+                <span class="text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                  :class="{
+                    'bg-red-600 text-white':            rf.severity_label === 'CRITICAL',
+                    'bg-orange-500 text-white':         rf.severity_label === 'HIGH',
+                    'bg-amber-400 text-amber-900':      rf.severity_label === 'MEDIUM',
+                    'bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-300': rf.severity_label === 'LOW' || rf.severity_label === 'MINIMAL',
+                  }"
+                  x-text="rf.severity_label"></span>
                 <span class="text-slate-300 text-xs" x-text="rf._open ? '▲' : '▼'"></span>
               </button>
-              <div x-show="rf._open" class="mt-2 ml-6">
+              <div x-show="rf._open" class="mt-2 ml-6 space-y-1">
                 <code class="text-xs bg-slate-100 dark:bg-slate-700 rounded-lg px-3 py-2 block text-slate-600 dark:text-slate-300 break-all"
                   x-text="'… ' + rf.snippet + ' …'"></code>
+                <p class="text-xs text-slate-400 dark:text-slate-500 italic" x-text="severityExplain(rf.severity_label)"></p>
               </div>
             </div>
           </template>
@@ -452,14 +456,14 @@
       <!-- AI Analysis -->
       <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden fade-up">
         <div class="px-5 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
-          <h3 class="font-semibold text-slate-700 dark:text-slate-200">🤖 AI Analysis</h3>
+          <h3 class="font-semibold text-slate-700 dark:text-slate-200">Analysis</h3>
           <span class="text-xs px-2.5 py-1 rounded-full font-medium"
             :class="{
               'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400': result && result.llm && result.llm.provider==='claude',
               'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400':   result && result.llm && result.llm.provider==='huggingface',
               'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400':   result && result.llm && result.llm.provider==='rule-based'
             }"
-            x-text="result && result.llm ? providerLabel(result.llm.provider) : ''">
+            x-text="result && result.llm ? {claude:'Claude AI', huggingface:'Mistral AI', 'rule-based':'Rule-based'}[result.llm.provider] || '' : ''">
           </span>
         </div>
         <div class="p-5 space-y-4 max-h-80 overflow-y-auto text-sm">
@@ -493,15 +497,15 @@
     <div class="flex flex-wrap gap-3 justify-center fade-up no-print">
       <button @click="copyReport()"
         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border-2 border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 text-sm font-semibold transition">
-        📋 Copy Report
+        Copy report
       </button>
       <button @click="window.print()"
         class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full border-2 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-sm font-semibold transition">
-        🖨 Save PDF
+        Save as PDF
       </button>
       <button @click="openChat(true)"
-        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white text-sm font-semibold shadow-md transition">
-        💬 Ask the AI about this document
+        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-md transition">
+        Ask about this document
       </button>
     </div>
 
@@ -509,7 +513,7 @@
     <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden fade-up">
       <button @click="showChunks = !showChunks"
         class="w-full px-5 py-3.5 flex items-center justify-between text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
-        <span>📊 Detailed chunk scores (<span x-text="result ? result.details.length : 0"></span> chunks analysed)</span>
+        <span>Detailed clause scores — <span x-text="result ? result.details.length : 0"></span> chunks analysed</span>
         <span class="text-slate-400 text-xs" x-text="showChunks ? '▲ collapse' : '▼ expand'"></span>
       </button>
       <div x-show="showChunks" class="overflow-x-auto border-t border-slate-100 dark:border-slate-700">
@@ -546,7 +550,7 @@
 <!-- ═══════════════════════ PAGE: HISTORY ════════════════════════ -->
 <main x-show="page==='history'" class="max-w-4xl mx-auto px-4 py-8 space-y-5">
   <div class="flex items-center justify-between">
-    <h1 class="text-2xl font-bold">📋 My Analysis History</h1>
+    <h1 class="text-2xl font-bold">My Analysis History</h1>
   </div>
 
   <div class="flex flex-wrap gap-3">
@@ -573,7 +577,7 @@
 
   <template x-if="historyData && historyData.length === 0">
     <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-12 text-center">
-      <div class="text-5xl mb-3">📭</div>
+      <p class="text-slate-400 text-3xl mb-2">—</p>
       <p class="text-slate-500 dark:text-slate-400">No analyses found for this email yet.</p>
     </div>
   </template>
@@ -722,10 +726,11 @@
 <!-- ════════════════ FLOATING CHAT BUTTON ════════════════════ -->
 <button @click="openChat(false)" x-show="!chatOpen"
   class="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center
-         text-2xl text-white transition hover:scale-110 active:scale-95 no-print"
-  style="background: linear-gradient(135deg,#4f46e5,#7c3aed);"
-  title="Ask the AI a question">
-  💬
+         text-white transition hover:scale-105 active:scale-95 no-print bg-indigo-600 hover:bg-indigo-700"
+  title="Ask the tenancy assistant">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
+    <path fill-rule="evenodd" d="M4.848 2.771A49.144 49.144 0 0112 2.25c2.43 0 4.817.178 7.152.52 1.978.292 3.348 2.024 3.348 3.97v6.02c0 1.946-1.37 3.678-3.348 3.97a48.901 48.901 0 01-3.476.383.39.39 0 00-.297.17l-2.755 4.133a.75.75 0 01-1.248 0l-2.755-4.133a.39.39 0 00-.297-.17 48.9 48.9 0 01-3.476-.384c-1.978-.29-3.348-2.024-3.348-3.97V6.741c0-1.946 1.37-3.68 3.348-3.97z" clip-rule="evenodd" />
+  </svg>
   <span x-show="chatUnread"
     class="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white"></span>
 </button>
@@ -742,16 +747,15 @@
   <div class="flex items-center justify-between px-4 py-3 rounded-t-2xl"
     style="background: linear-gradient(135deg,#4338ca,#6d28d9);">
     <div class="flex items-center gap-2 text-white">
-      <span class="text-xl">🏠</span>
       <div>
-        <p class="font-semibold text-sm leading-tight">Rental Assistant</p>
+        <p class="font-semibold text-sm leading-tight">Tenancy Assistant</p>
         <p class="text-indigo-200 text-xs"
           x-text="llmProvider==='claude' ? 'Claude AI' : llmProvider==='huggingface' ? 'Mistral AI · Free' : 'Rule-based mode'">
         </p>
       </div>
     </div>
     <div class="flex items-center gap-2">
-      <button @click="chatMessages=[]; chatContext=null" class="text-indigo-200 hover:text-white transition text-sm" title="Clear chat">🗑</button>
+      <button @click="chatMessages=[]; chatContext=null" class="text-indigo-200 hover:text-white transition text-xs font-medium" title="Clear chat">Clear</button>
       <button @click="chatOpen=false" class="text-indigo-200 hover:text-white text-xl leading-none transition" title="Close">×</button>
     </div>
   </div>
@@ -772,10 +776,9 @@
     <!-- Empty state -->
     <template x-if="chatMessages.length === 0">
       <div class="text-center py-6 space-y-3">
-        <div class="text-4xl">🏠</div>
         <p class="text-slate-600 dark:text-slate-300 font-semibold text-sm">Australian Tenancy Assistant</p>
-        <p class="text-slate-400 dark:text-slate-500 text-xs leading-relaxed">
-          Ask anything about bonds, repairs, evictions,<br>rental scams, or your tenant rights.
+        <p class="text-slate-400 dark:text-slate-500 text-xs leading-relaxed mt-1">
+          Ask about bonds, repairs, your rights,<br>evictions, or scam patterns.
         </p>
         <div class="space-y-2 mt-3">
           <template x-for="q in starterQuestions" :key="q">
@@ -847,9 +850,9 @@ function app() {
     page: 'analyse',
     mobileMenu: false,
     tabs: [
-      { id: 'analyse', label: '🔍 Analyse' },
-      { id: 'history', label: '📋 History' },
-      { id: 'about',   label: 'ℹ About'   },
+      { id: 'analyse', label: 'Analyse' },
+      { id: 'history', label: 'History' },
+      { id: 'about',   label: 'About'   },
     ],
 
     // Dark mode
@@ -930,7 +933,7 @@ function app() {
 
     // ── Computed ──────────────────────────────────────────────────
     get llmBadge() {
-      return { claude: '✨ Claude AI', huggingface: '🤗 Mistral AI', 'rule-based': '📋 Rule-based' }[this.llmProvider] || this.llmProvider;
+      return { claude: 'Claude AI', huggingface: 'Mistral AI', 'rule-based': 'Rule-based mode' }[this.llmProvider] || this.llmProvider;
     },
     get riskLevel() {
       if (!this.result) return 'LOW';
@@ -954,6 +957,16 @@ function app() {
 
     providerLabel(p) {
       return { claude: '✨ Claude AI', huggingface: '🤗 Mistral AI', 'rule-based': '📋 Rule-based' }[p] || p;
+    },
+
+    severityExplain(label) {
+      return {
+        'CRITICAL': 'This is a near-certain scam signal. Do not proceed.',
+        'HIGH':     'This is a strong warning sign. Verify carefully before signing or paying.',
+        'MEDIUM':   'This warrants caution. Ask for clarification from the landlord/agent.',
+        'LOW':      'Minor concern — worth noting but may appear in legitimate listings.',
+        'MINIMAL':  'Very mild flag — common in some legitimate leases.',
+      }[label] || '';
     },
 
     // ── File handling ─────────────────────────────────────────────
