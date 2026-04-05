@@ -36,6 +36,7 @@ from rental_scam_detector import (
     load_document,
     load_forms_and_chunk,
     FORMS_DIR,
+    EMBED_CACHE,
 )
 
 # ── Paths ────────────────────────────────────────────────────────
@@ -51,10 +52,16 @@ async def lifespan(app: FastAPI):
     print("Initialising database …")
     database.init_db()
 
-    print("Loading reference corpus and detector …")
-    _, cuad_texts = load_cuad()
+    print("Loading detector …")
     au_texts = [r["text"] for r in load_forms_and_chunk(FORMS_DIR)]
-    app.state.detector = RentalScamDetector(au_texts + cuad_texts)
+    if EMBED_CACHE.exists():
+        # Embedding cache baked into image — skip loading CUAD to stay under 512MB RAM
+        print("  Embedding cache found — skipping CUAD load.")
+        app.state.detector = RentalScamDetector(au_texts)
+    else:
+        print("  No cache — loading CUAD to build embeddings (first run only)…")
+        _, cuad_texts = load_cuad()
+        app.state.detector = RentalScamDetector(au_texts + cuad_texts)
     print(f"Ready  |  LLM provider: {llm_analyser.PROVIDER}")
     yield
 
