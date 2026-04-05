@@ -6,6 +6,7 @@ Run:
 """
 
 import io
+import os
 import pathlib
 import tempfile
 
@@ -13,6 +14,7 @@ import pandas as pd
 import streamlit as st
 
 # ── Core modules ────────────────────────────────────────────────
+import download_data
 from rental_scam_detector import (
     RentalScamDetector,
     load_cuad,
@@ -31,8 +33,13 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Bootstrap DB ────────────────────────────────────────────────
-database.init_db()
+# ── Bootstrap data files + DB ───────────────────────────────────
+@st.cache_resource(show_spinner="Downloading reference data (one-time setup)…")
+def bootstrap_data():
+    download_data.run()
+    database.init_db()
+
+bootstrap_data()
 
 
 # ── Load detector once (cached so CUAD isn't re-parsed every run) ──
@@ -170,7 +177,10 @@ if page == "Analyse Document":
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                 tmp.write(uploaded.read())
                 tmp_path = tmp.name
-            raw_text = load_document(tmp_path)
+            try:
+                raw_text = load_document(tmp_path)
+            finally:
+                os.unlink(tmp_path)
     else:
         raw_text = st.text_area(
             "Paste the listing or agreement text here",
@@ -284,14 +294,14 @@ comparing them against two reference corpora:
 
 ### Two detection layers
 
-1. **Red-flag patterns** — 16 regex rules targeting known scam signals:
+1. **Red-flag patterns** — 28 regex rules targeting known scam signals:
    payment methods (Western Union, crypto, gift cards), landlord unavailability,
    no-inspection clauses, illegal terms (rights waiver, unlimited rent increases),
    and pressure tactics.
 
-2. **Clause anomaly scoring** — TF-IDF cosine similarity against the reference
-   corpus.  Chunks of the submitted document that have no close match in any
-   known-good lease are flagged as anomalous.
+2. **Clause anomaly scoring** — sentence-transformer cosine similarity against
+   the reference corpus.  Chunks of the submitted document that have no close
+   match in any known-good lease are flagged as anomalous.
 
 ### Limitations
 - The tool flags *suspicious* patterns — it does not guarantee a listing is safe or a scam.
@@ -306,5 +316,5 @@ streamlit run app.py
 ```
 
 ### Tech stack
-`Python` · `Streamlit` · `scikit-learn TF-IDF` · `NLTK` · `pdfplumber` · `SQLite` · `Anthropic Claude` (optional)
+`Python` · `Streamlit` · `sentence-transformers` · `NLTK` · `pdfplumber` · `SQLite` · `Anthropic Claude` (optional)
 """)
