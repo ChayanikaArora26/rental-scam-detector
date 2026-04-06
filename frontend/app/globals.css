@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #09090b;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: #fafafa;
+    font-family: "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Subtle dot-grid background */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, #ffffff0a 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ambient glow orbs */
+  body::after {
+    content: "";
+    position: fixed;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 500px;
+    background: radial-gradient(ellipse, #7c3aed18 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  * { position: relative; z-index: 1; }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+  ::selection { background: #7c3aed50; color: #fff; }
+}
+
+@layer utilities {
+  .glass {
+    background: rgba(24, 24, 27, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .glow-violet {
+    box-shadow: 0 0 0 1px #7c3aed30, 0 0 30px #7c3aed18;
+  }
+
+  .glow-red {
+    box-shadow: 0 0 0 1px #ef444430, 0 0 30px #ef444418;
+  }
+
+  .glow-amber {
+    box-shadow: 0 0 0 1px #f59e0b30, 0 0 30px #f59e0b18;
+  }
+
+  .glow-green {
+    box-shadow: 0 0 0 1px #10b98130, 0 0 30px #10b98118;
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #c4b5fd 0%, #818cf8 50%, #67e8f9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .shimmer-bg {
+    background: linear-gradient(90deg, #ffffff08 25%, #ffffff14 50%, #ffffff08 75%);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+}

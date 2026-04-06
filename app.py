@@ -24,7 +24,7 @@ from rental_scam_detector import (
     FORMS_DIR,
 )
 import llm_analyser
-import database
+import sqlite_database as database
 
 # ── Page config ─────────────────────────────────────────────────
 st.set_page_config(

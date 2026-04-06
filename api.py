@@ -1,18 +1,18 @@
 """
-api.py — FastAPI backend for the Rental Scam Detector.
-
-Run:
-    uvicorn api:app --reload --port 8000
+api.py — RentalGuard FastAPI backend (full-stack).
 
 Endpoints:
-    GET  /                      → serves static/index.html
-    POST /api/analyse           → multipart: file?, text?, name, email
-    POST /api/chat              → JSON: {messages, context?} → chatbot reply
-    GET  /api/history/{email}   → list of past analyses for that email
-    GET  /api/status            → server health + LLM provider info
+  Auth:    /auth/*         — register, login, refresh, logout, verify, reset
+  Agent:   /agent/run      — ReAct LLM agent (authenticated)
+  API:     /api/analyse    — rental document analysis (public)
+           /api/chat       — legacy chatbot
+           /api/history/*  — analysis history
+           /api/status     — health check
+           /api/scrape     — URL scraper
 """
 
 import asyncio
+import logging
 import os
 import pathlib
 import tempfile
@@ -21,15 +21,24 @@ from typing import Any
 
 import requests as _requests
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
-import database
+# ── Internal modules ──────────────────────────────────────────────
+import sqlite_database as sqlite_db    # existing SQLite layer (legacy)
 import download_data
 import llm_analyser
+from auth.router import router as auth_router
+from agent.router import router as agent_router
+from config import get_settings
+from database.session import engine, get_db
+from database.models import Base
+from security.rate_limiter import limiter
 from rental_scam_detector import (
     RentalScamDetector,
     load_cuad,
@@ -39,50 +48,84 @@ from rental_scam_detector import (
     EMBED_CACHE,
 )
 
-# ── Paths ────────────────────────────────────────────────────────
+log = logging.getLogger(__name__)
+settings = get_settings()
+
 BASE_DIR   = pathlib.Path(__file__).parent
 STATIC_DIR = BASE_DIR / "static"
 STATIC_DIR.mkdir(exist_ok=True)
 
 
-# ── Startup: load detector once ──────────────────────────────────
+# ── Startup / shutdown ────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    download_data.run()   # no-op if data already present
-    print("Initialising database …")
-    database.init_db()
+    # 1. Download reference data
+    download_data.run()
 
-    print("Loading detector …")
+    # 2. Bootstrap legacy SQLite DB
+    sqlite_db.init_db()
+
+    # 3. Create Postgres tables (create-if-not-exists for dev convenience)
+    #    In production use: alembic upgrade head
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        log.info("PostgreSQL tables ready")
+    except Exception as e:
+        log.warning("PostgreSQL not available — auth/agent disabled: %s", e)
+
+    # 4. Load ML detector
+    log.info("Loading rental scam detector…")
     au_texts = [r["text"] for r in load_forms_and_chunk(FORMS_DIR)]
     if EMBED_CACHE.exists():
-        # Embedding cache baked into image — skip loading CUAD to stay under 512MB RAM
-        print("  Embedding cache found — skipping CUAD load.")
         app.state.detector = RentalScamDetector(au_texts)
     else:
-        print("  No cache — loading CUAD to build embeddings (first run only)…")
         _, cuad_texts = load_cuad()
         app.state.detector = RentalScamDetector(au_texts + cuad_texts)
-    print(f"Ready  |  LLM provider: {llm_analyser.PROVIDER}")
+
+    log.info("Ready | LLM: %s", llm_analyser.PROVIDER)
     yield
 
+    await engine.dispose()
 
-app = FastAPI(title="Rental Scam Detector API", lifespan=lifespan)
+
+# ── App ───────────────────────────────────────────────────────────
+app = FastAPI(title="RentalGuard API", version="2.0.0", lifespan=lifespan)
+
+# Rate limiter state
+app.state.limiter = limiter
+app.add_exception_handler(
+    RateLimitExceeded,
+    lambda req, exc: JSONResponse(
+        {"detail": "Too many requests — please slow down"},
+        status_code=429,
+    ),
+)
+app.add_middleware(SlowAPIMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        settings.APP_URL,
+        "https://*.vercel.app",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Serve static files (CSS, JS assets if any)
+# Static files
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+# ── Routers ───────────────────────────────────────────────────────
+app.include_router(auth_router)
+app.include_router(agent_router)
 
 
 # ── Pydantic models ───────────────────────────────────────────────
-
 class ChatMessage(BaseModel):
-    role: str      # "user" | "assistant"
+    role: str
     content: str
 
 class ChatRequest(BaseModel):
@@ -93,23 +136,23 @@ class ScrapeRequest(BaseModel):
     url: str
 
 
-# ── Routes ───────────────────────────────────────────────────────
+# ── Existing API routes ───────────────────────────────────────────
 
 @app.get("/", include_in_schema=False)
 def serve_frontend():
-    """Serve the single-page HTML app."""
     index = STATIC_DIR / "index.html"
     if not index.exists():
-        return JSONResponse({"error": "Frontend not found. Place index.html in static/"}, status_code=404)
+        return JSONResponse({"detail": "Frontend not deployed"}, 404)
     return FileResponse(str(index))
 
 
 @app.get("/api/status")
 def status():
     return {
-        "ok": True,
+        "ok":           True,
         "llm_provider": llm_analyser.PROVIDER,
         "llm_enabled":  llm_analyser.ENABLED,
+        "version":      "2.0.0",
     }
 
 
@@ -120,18 +163,9 @@ async def analyse(
     name:  str               = Form(default=""),
     email: str               = Form(default=""),
 ):
-    """
-    Analyse a rental document or pasted text for scam signals.
-
-    Accepts multipart/form-data with either:
-      - `file`  — a PDF or DOCX upload
-      - `text`  — plain text (listing / agreement body)
-    Plus optional `name` and `email` to save history.
-    """
     raw_text = ""
     filename = ""
 
-    # Extract text from uploaded file
     if file and file.filename:
         filename = file.filename
         suffix   = pathlib.Path(filename).suffix.lower()
@@ -146,24 +180,20 @@ async def analyse(
         finally:
             os.unlink(tmp_path)
 
-    # Fall back to pasted text
     if not raw_text.strip():
         raw_text = text.strip()
 
     if not raw_text:
         raise HTTPException(400, "Provide a file or paste some text.")
 
-    # Run detection
     detector = app.state.detector
     result   = detector.analyse(raw_text)
     llm_out  = llm_analyser.explain(result)
 
-    # Persist if user supplied email
     if email.strip():
-        uid = database.get_or_create_user(name or email.split("@")[0], email)
-        database.save_analysis(uid, result, llm_out, filename)
+        uid = sqlite_db.get_or_create_user(name or email.split("@")[0], email)
+        sqlite_db.save_analysis(uid, result, llm_out, filename)
 
-    # Serialise (DataFrame → list of dicts)
     details = (
         result["details"].to_dict(orient="records")
         if result["details"] is not None and not result["details"].empty
@@ -187,13 +217,6 @@ async def analyse(
 
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
-    """
-    Multi-turn chatbot for Australian tenancy law questions.
-
-    Body (JSON):
-      messages — list of {role: "user"|"assistant", content: str}
-      context  — optional analysis result to inject as document context
-    """
     messages = [{"role": m.role, "content": m.content} for m in req.messages]
     reply = llm_analyser.chat(messages, req.context)
     return {"reply": reply, "provider": llm_analyser.PROVIDER}
@@ -201,10 +224,6 @@ async def chat_endpoint(req: ChatRequest):
 
 @app.post("/api/scrape")
 async def scrape_url(req: ScrapeRequest):
-    """
-    Fetch a rental listing URL and extract readable text for analysis.
-    Supports Gumtree, Domain, RealEstate.com.au, and any public page.
-    """
     url = req.url.strip()
     if not url.startswith(("http://", "https://")):
         raise HTTPException(400, "URL must start with http:// or https://")
@@ -212,7 +231,7 @@ async def scrape_url(req: ScrapeRequest):
     def _fetch(u: str) -> str:
         r = _requests.get(
             u, timeout=12,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; RentalScamDetector/1.0)"},
+            headers={"User-Agent": "Mozilla/5.0 (compatible; RentalGuard/2.0)"},
             allow_redirects=True,
         )
         r.raise_for_status()
@@ -226,7 +245,7 @@ async def scrape_url(req: ScrapeRequest):
         loop = asyncio.get_running_loop()
         text = await loop.run_in_executor(None, _fetch, url)
         if len(text) < 100:
-            raise HTTPException(422, "Page returned too little text — it may require a login or block bots.")
+            raise HTTPException(422, "Page returned too little text.")
         return {"text": text, "chars": len(text), "url": url}
     except _requests.RequestException as e:
         raise HTTPException(422, f"Could not fetch URL: {e}")
@@ -238,6 +257,5 @@ async def scrape_url(req: ScrapeRequest):
 
 @app.get("/api/history/{email}")
 def history(email: str):
-    """Return all past analyses for this email address."""
-    rows = database.get_user_history(email)
+    rows = sqlite_db.get_user_history(email)
     return {"email": email, "count": len(rows), "analyses": rows}

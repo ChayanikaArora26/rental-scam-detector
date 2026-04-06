@@ -1,22 +1,46 @@
-# AI / ML
+# ── Web framework ────────────────────────────────────────────────
+fastapi>=0.111
+uvicorn[standard]>=0.29
+python-multipart>=0.0.9
+
+# ── Database ─────────────────────────────────────────────────────
+sqlalchemy[asyncio]>=2.0
+asyncpg>=0.29
+alembic>=1.13
+
+# ── Auth & Security ──────────────────────────────────────────────
+python-jose[cryptography]>=3.3
+passlib[bcrypt]>=1.7
+slowapi>=0.1.9
+authlib>=1.3          # OAuth2 (Google)
+httpx>=0.27           # async HTTP for OAuth
+
+# ── Settings ─────────────────────────────────────────────────────
+pydantic-settings>=2.2
+
+# ── Email ────────────────────────────────────────────────────────
+aiosmtplib>=3.0
+
+# ── AI / ML ─────────────────────────────────────────────────────
 sentence-transformers>=2.7
 scikit-learn>=1.5
 numpy>=1.26
 pandas>=2.0
 nltk>=3.9
-
-# LLM providers (both optional — app works without them)
 anthropic>=0.30
 huggingface-hub>=0.23
 
-# Document parsing
+# ── Anonymisation (NER) ───────────────────────────────────────────
+spacy>=3.7
+
+# ── Document parsing ─────────────────────────────────────────────
 pdfplumber>=0.11
 python-docx>=1.1
 
-# URL scraper
+# ── URL scraper ──────────────────────────────────────────────────
 requests>=2.32
 beautifulsoup4>=4.12
 
-# Utilities
+# ── Utilities ────────────────────────────────────────────────────
 streamlit>=1.35
 matplotlib>=3.8
