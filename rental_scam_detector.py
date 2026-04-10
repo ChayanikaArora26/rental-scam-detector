@@ -28,6 +28,7 @@
 import os
 import sys
 import json
+import pickle
 import re
 import pathlib
 import nltk
@@ -35,7 +36,8 @@ import pdfplumber
 import pandas as pd
 import numpy as np
 from docx import Document
-from fastembed import TextEmbedding
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from nltk.tokenize import sent_tokenize
 
 # ──────────────────────────────────────────────────────────────
@@ -49,13 +51,11 @@ PROCESSED_DIR = DATA_DIR / "processed"
 
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-# Semantic similarity threshold (sentence-transformer cosine similarity, 0–1).
-# Chunks scoring below this have no semantic match in any known-good lease.
-SUSPICION_THRESHOLD = 0.30
+# Semantic similarity threshold (TF-IDF cosine similarity, 0–1).
+# Chunks scoring below this have no lexical match in any known-good lease.
+SUSPICION_THRESHOLD = 0.08
 
-# Embedding model via fastembed (ONNX, no PyTorch, ~60MB)
-EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-EMBED_CACHE = pathlib.Path(__file__).parent / "data" / "processed" / "ref_embeddings.npy"
+TFIDF_CACHE = pathlib.Path(__file__).parent / "data" / "processed" / "tfidf_vectorizer.pkl"
 
 # ──────────────────────────────────────────────────────────────
 # NLTK setup
@@ -162,9 +162,7 @@ def load_cuad() -> tuple[list[dict], list[str]]:
     """Load CUAD and return (clause_rows, all_clause_texts)."""
     assert CUAD_PATH.exists(), (
         f"CUAD not found at {CUAD_PATH}\n"
-        "Run:  python3 -c \"from huggingface_hub import hf_hub_download; "
-        "hf_hub_download('theatticusproject/cuad','CUAD_v1/CUAD_v1.json',"
-        "repo_type='dataset',local_dir='data/cuad')\""
+        "Run download_data.py first to fetch the dataset."
     )
     print("Loading CUAD …", end=" ", flush=True)
     with open(CUAD_PATH) as f:
@@ -299,43 +297,41 @@ class RentalScamDetector:
     Two-layer analysis:
       Layer 1 — Red-flag patterns: 28 regex rules for known scam signals
                 (payment methods, overseas landlord, WhatsApp-only, etc.)
-      Layer 2 — Semantic anomaly: sentence-transformer embeddings compared
-                against AU tenancy forms + CUAD legal clauses via cosine
-                similarity. Catches paraphrased scams that exact keyword
-                rules miss (e.g. "transfer funds" ≈ "send cash").
+      Layer 2 — Lexical anomaly: TF-IDF cosine similarity against AU tenancy
+                form chunks. Catches clauses with no lexical overlap with any
+                known-good lease.
 
-    Embeddings are cached to disk after the first run for fast startup.
+    TF-IDF vectorizer is cached to disk after the first run for fast startup.
     Final risk score combines both layers.
     """
 
     def __init__(self, reference_texts: list[str]):
-        print(f"Loading embedding model ({EMBED_MODEL}) …", end=" ", flush=True)
-        self.model = TextEmbedding(EMBED_MODEL)
-        print("done")
-
-        if EMBED_CACHE.exists():
-            print("Loading cached reference embeddings …", end=" ", flush=True)
-            self.ref_embeddings = np.load(EMBED_CACHE)
-            print(f"done  ({len(self.ref_embeddings):,} vectors)")
+        if TFIDF_CACHE.exists():
+            print("Loading cached TF-IDF vectorizer …", end=" ", flush=True)
+            with open(TFIDF_CACHE, "rb") as f:
+                state = pickle.load(f)
+            self.vectorizer = state["vectorizer"]
+            self.ref_matrix = state["ref_matrix"]
+            print(f"done  ({self.ref_matrix.shape[0]:,} reference chunks)")
         else:
-            print(f"Encoding {len(reference_texts):,} reference texts "
-                  f"(one-time, ~60 s on CPU) …")
-            self.ref_embeddings = np.array(list(self.model.embed(reference_texts)))
-            # Normalise to unit vectors so dot product = cosine similarity
-            norms = np.linalg.norm(self.ref_embeddings, axis=1, keepdims=True)
-            self.ref_embeddings = self.ref_embeddings / np.maximum(norms, 1e-9)
-            np.save(EMBED_CACHE, self.ref_embeddings)
-            print(f"Embedding cache saved to {EMBED_CACHE}")
+            print(f"Building TF-IDF index from {len(reference_texts):,} reference texts …",
+                  end=" ", flush=True)
+            self.vectorizer = TfidfVectorizer(
+                max_features=30_000,
+                ngram_range=(1, 2),
+                sublinear_tf=True,
+            )
+            self.ref_matrix = self.vectorizer.fit_transform(reference_texts)
+            with open(TFIDF_CACHE, "wb") as f:
+                pickle.dump({"vectorizer": self.vectorizer, "ref_matrix": self.ref_matrix}, f)
+            print(f"done  (cache saved to {TFIDF_CACHE})")
 
     def score_chunks(self, chunks: list[str]) -> pd.DataFrame:
-        """Return a DataFrame with each chunk and its best semantic similarity score."""
+        """Return a DataFrame with each chunk and its best TF-IDF cosine similarity score."""
         if not chunks:
             return pd.DataFrame()
-        query_embs = np.array(list(self.model.embed(chunks)))
-        norms = np.linalg.norm(query_embs, axis=1, keepdims=True)
-        query_embs = query_embs / np.maximum(norms, 1e-9)
-        # Matrix multiply gives cosine similarity for unit-norm vectors
-        sims = query_embs @ self.ref_embeddings.T   # shape: (n_chunks, n_ref)
+        query_matrix = self.vectorizer.transform(chunks)
+        sims = cosine_similarity(query_matrix, self.ref_matrix)  # (n_chunks, n_ref)
         best_scores = sims.max(axis=1)
         return pd.DataFrame({
             "chunk":      chunks,

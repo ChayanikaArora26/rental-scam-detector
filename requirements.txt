@@ -25,16 +25,11 @@ python-dotenv>=1.0
 aiosmtplib>=3.0
 
 # ── AI / ML ─────────────────────────────────────────────────────
-fastembed==0.4.2
 scikit-learn>=1.5
 numpy>=1.26
 pandas>=2.0
 nltk>=3.9
 anthropic>=0.30
-huggingface-hub>=0.23
-
-# ── Anonymisation (NER) ───────────────────────────────────────────
-spacy>=3.7
 
 # ── Document parsing ─────────────────────────────────────────────
 pdfplumber>=0.11
@@ -43,6 +38,3 @@ python-docx>=1.1
 # ── URL scraper ──────────────────────────────────────────────────
 requests>=2.32
 beautifulsoup4>=4.12
-
-# ── Utilities ────────────────────────────────────────────────────
-matplotlib>=3.8

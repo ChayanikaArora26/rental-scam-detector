@@ -42,11 +42,9 @@ from security.rate_limiter import limiter
 from email_service.service import send_analysis_report
 from rental_scam_detector import (
     RentalScamDetector,
-    load_cuad,
     load_document,
     load_forms_and_chunk,
     FORMS_DIR,
-    EMBED_CACHE,
 )
 
 log = logging.getLogger(__name__)
@@ -78,11 +76,7 @@ async def lifespan(app: FastAPI):
     # 4. Load ML detector
     log.info("Loading rental scam detector…")
     au_texts = [r["text"] for r in load_forms_and_chunk(FORMS_DIR)]
-    if EMBED_CACHE.exists():
-        app.state.detector = RentalScamDetector(au_texts)
-    else:
-        _, cuad_texts = load_cuad()
-        app.state.detector = RentalScamDetector(au_texts + cuad_texts)
+    app.state.detector = RentalScamDetector(au_texts)
 
     log.info("Ready | LLM: %s", llm_analyser.PROVIDER)
     yield
