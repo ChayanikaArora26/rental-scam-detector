@@ -21,7 +21,7 @@ from typing import Any
 
 import requests as _requests
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,6 +39,7 @@ from config import get_settings
 from database.session import engine, get_db
 from database.models import Base
 from security.rate_limiter import limiter
+from email_service.service import send_analysis_report
 from rental_scam_detector import (
     RentalScamDetector,
     load_cuad,
@@ -158,10 +159,12 @@ def status():
 
 @app.post("/api/analyse")
 async def analyse(
-    file:  UploadFile | None = File(default=None),
-    text:  str               = Form(default=""),
-    name:  str               = Form(default=""),
-    email: str               = Form(default=""),
+    request: Request,
+    file:    UploadFile | None = File(default=None),
+    text:    str               = Form(default=""),
+    name:    str               = Form(default=""),
+    email:   str               = Form(default=""),
+    db:      Any               = Depends(get_db),
 ):
     raw_text = ""
     filename = ""
@@ -190,9 +193,26 @@ async def analyse(
     result   = detector.analyse(raw_text)
     llm_out  = llm_analyser.explain(result)
 
+    # Save to SQLite history for anonymous/email users
     if email.strip():
         uid = sqlite_db.get_or_create_user(name or email.split("@")[0], email)
         sqlite_db.save_analysis(uid, result, llm_out, filename)
+
+    # If a verified registered user is logged in, send them the report email
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            from auth.service import decode_access_token, get_user_by_id
+            payload = decode_access_token(auth_header.split(" ", 1)[1])
+            user_id = payload.get("sub")
+            if user_id:
+                reg_user = await get_user_by_id(db, user_id)
+                if reg_user and reg_user.is_verified:
+                    asyncio.create_task(
+                        send_analysis_report(reg_user.email, result, llm_out, filename)
+                    )
+        except Exception:
+            pass  # token issues never block analysis
 
     details = (
         result["details"].to_dict(orient="records")

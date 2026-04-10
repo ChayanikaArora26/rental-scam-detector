@@ -241,11 +241,11 @@ RED_FLAGS: list[tuple[str, str, int, str]] = [
     (r"\bwaives?\s+all\s+rights\b",
      "tenant waives all rights (illegal in AU)", 50, "CRITICAL"),
     (r"\bnon.?refundable\b.*\ball\s+circumstances\b",
-     "non-refundable under all circumstances (illegal)", 30, "HIGH"),
+     "non-refundable under all circumstances (illegal in AU)", 15, "MEDIUM"),
     (r"\benter.*without.*notice\b|\bno\s+notice.*entry\b",
-     "landlord entry without notice (illegal in AU)", 30, "HIGH"),
+     "landlord entry without notice (illegal in AU)", 15, "MEDIUM"),
     (r"\bincrease.*\b(20|25|30|40|50)\s*%\b",
-     "excessive rent increase clause", 15, "MEDIUM"),
+     "excessive rent increase clause", 8, "LOW"),
     (r"\bno\s+pets\b.*\bno\s+guests\b|\bno\s+guests\b.*\bno\s+pets\b",
      "overly restrictive lifestyle controls", 8, "LOW"),
 
@@ -367,18 +367,19 @@ class RentalScamDetector:
         # Combined risk: severity-weighted flags dominate; anomaly adds up to 20 pts
         combined_risk = min(100, flag_score + round(anomaly_pct * 0.4))
 
-        # Verdict thresholds (tuned to new severity scale):
-        #   CRITICAL flag alone = 50 pts → HIGH
-        #   HIGH flag alone     = 30 pts → MEDIUM
-        #   MEDIUM flag alone   = 15 pts → MEDIUM
-        #   LOW / MINIMAL flags = 3-8 pts → LOW unless combined
+        # Verdict thresholds:
+        #   CRITICAL flag alone = 50 pts → HIGH RISK
+        #   2× HIGH flags       = 60 pts → HIGH RISK
+        #   1× HIGH flag        = 30 pts → MEDIUM RISK
+        #   MEDIUM/illegal flag = 15 pts → LOW-MEDIUM (caution)
+        #   LOW flags / anomaly only → LOW RISK
         has_critical = any(rf["severity_label"] == "CRITICAL" for rf in red_flags)
         if has_critical or combined_risk >= 45:
             verdict = "HIGH RISK — strong scam indicators detected"
-        elif combined_risk >= 15:
+        elif combined_risk >= 25:
             verdict = "MEDIUM RISK — some suspicious elements"
-        elif anomaly_pct >= 30:
-            verdict = "MEDIUM RISK — unusual clauses detected"
+        elif combined_risk >= 10 or anomaly_pct >= 30:
+            verdict = "LOW-MEDIUM RISK — one or more clauses need attention"
         else:
             verdict = "LOW RISK — looks similar to standard AU leases"
 

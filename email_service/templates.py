@@ -61,6 +61,135 @@ def password_reset_email(token: str) -> tuple[str, str]:
     return subject, html
 
 
+def analysis_report_email(
+    result: dict,
+    llm_out: dict,
+    filename: str,
+) -> tuple[str, str]:
+    verdict      = result.get("verdict", "Unknown")
+    combined     = result.get("combined_risk", 0)
+    flag_score   = result.get("flag_score", 0)
+    n_flags      = result.get("n_flags", 0)
+    n_anomalous  = result.get("n_anomalous", 0)
+    total_chunks = result.get("total_chunks", 0)
+    red_flags    = result.get("red_flags", [])
+    llm_text     = (llm_out or {}).get("explanation", "")
+
+    # Verdict colour
+    risk_pct = int(combined * 100)
+    if combined >= 0.65:
+        verdict_colour = "#ef4444"   # red
+        verdict_bg     = "#450a0a"
+        verdict_label  = "HIGH RISK"
+    elif combined >= 0.35:
+        verdict_colour = "#f59e0b"   # amber
+        verdict_bg     = "#451a03"
+        verdict_label  = "MODERATE RISK"
+    else:
+        verdict_colour = "#22c55e"   # green
+        verdict_bg     = "#052e16"
+        verdict_label  = "LOW RISK"
+
+    doc_label = f'<strong style="color:#a78bfa">{filename}</strong>' if filename else "your document"
+
+    # Red flags section — each item is a dict {flag, snippet, severity, severity_label}
+    if red_flags:
+        flag_items = "".join(
+            f'<tr><td style="padding:8px 12px;border-bottom:1px solid #27272a;font-size:14px;color:#fca5a5">⚠️ {f["flag"] if isinstance(f, dict) else f}'
+            + (f'<span style="float:right;font-size:11px;color:#71717a">{f["severity_label"]}</span>' if isinstance(f, dict) else "")
+            + '</td></tr>'
+            for f in red_flags
+        )
+        flags_section = f"""
+        <p style="color:#fff;font-size:16px;font-weight:600;margin:28px 0 10px">🚩 Red Flags Detected ({n_flags})</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#1c1917;border-radius:10px;border:1px solid #3f3f46;overflow:hidden">
+          {flag_items}
+        </table>
+        """
+    else:
+        flags_section = '<p style="color:#22c55e">✅ No red flags detected.</p>'
+
+    # Anomalous clauses section — result["details"] is a pandas DataFrame
+    details = result.get("details")
+    anomaly_rows = ""
+    try:
+        if details is not None and hasattr(details, "iterrows"):
+            # Find the anomaly boolean column (last bool-dtype column)
+            bool_cols = [c for c in details.columns if details[c].dtype == bool]
+            anomaly_col = bool_cols[-1] if bool_cols else None
+            if anomaly_col:
+                anomalous_df = details[details[anomaly_col]].head(10)
+                text_col = details.columns[0]
+                sim_col  = "similarity" if "similarity" in details.columns else None
+                for _, row in anomalous_df.iterrows():
+                    clause_text = str(row[text_col])
+                    snippet = clause_text[:200] + ("…" if len(clause_text) > 200 else "")
+                    sim_str = f"{float(row[sim_col]):.0%}" if sim_col else ""
+                    anomaly_rows += f"""
+                    <tr>
+                      <td style="padding:10px 14px;border-bottom:1px solid #27272a;font-size:13px;color:#e4e4e7">{snippet}</td>
+                      <td style="padding:10px 14px;border-bottom:1px solid #27272a;font-size:12px;color:#f87171;text-align:right;white-space:nowrap">
+                        {f"sim {sim_str}" if sim_str else "anomalous"}
+                      </td>
+                    </tr>"""
+    except Exception:
+        pass
+
+    clauses_section = ""
+    if anomaly_rows:
+        clauses_section = f"""
+        <p style="color:#fff;font-size:16px;font-weight:600;margin:28px 0 10px">📋 Anomalous Clauses ({n_anomalous} of {total_chunks})</p>
+        <p style="color:#71717a;font-size:13px;margin:0 0 10px">These clauses are significantly different from the 510 real contracts in our database.</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#1c1917;border-radius:10px;border:1px solid #3f3f46;overflow:hidden">
+          <tr style="background:#27272a">
+            <th style="padding:8px 14px;font-size:11px;color:#71717a;text-align:left;font-weight:600;text-transform:uppercase">Clause</th>
+            <th style="padding:8px 14px;font-size:11px;color:#71717a;text-align:right;font-weight:600;text-transform:uppercase">Match</th>
+          </tr>
+          {anomaly_rows}
+        </table>
+        """
+
+    # LLM explanation
+    llm_section = ""
+    if llm_text:
+        llm_section = f"""
+        <p style="color:#fff;font-size:16px;font-weight:600;margin:28px 0 10px">🤖 AI Analysis</p>
+        <div style="background:#1e1b4b;border-radius:10px;border:1px solid #3730a3;padding:16px 20px;font-size:14px;color:#c7d2fe;line-height:1.7">
+          {llm_text.replace(chr(10), "<br>")}
+        </div>
+        """
+
+    subject = f"RentalGuard Report — {verdict_label} ({risk_pct}% risk)"
+    body = f"""
+    <p style="color:#fff;font-size:18px;font-weight:600;margin:0 0 8px">Your Analysis Report</p>
+    <p style="margin:0 0 24px">Here are the results for {doc_label}.</p>
+
+    <!-- Verdict banner -->
+    <div style="background:{verdict_bg};border:1px solid {verdict_colour};border-radius:12px;padding:20px 24px;display:flex;align-items:center;gap:16px;margin-bottom:8px">
+      <div>
+        <p style="margin:0;font-size:28px;font-weight:800;color:{verdict_colour}">{risk_pct}%</p>
+        <p style="margin:2px 0 0;font-size:12px;font-weight:700;color:{verdict_colour};letter-spacing:.05em">{verdict_label}</p>
+      </div>
+      <div style="border-left:1px solid {verdict_colour};opacity:.3;height:48px;margin:0 8px"></div>
+      <div>
+        <p style="margin:0;font-size:15px;font-weight:600;color:#fff">{verdict}</p>
+        <p style="margin:4px 0 0;font-size:13px;color:#a1a1aa">{n_flags} red flags · {n_anomalous}/{total_chunks} clauses anomalous</p>
+      </div>
+    </div>
+
+    {flags_section}
+    {clauses_section}
+    {llm_section}
+
+    <p style="margin:28px 0 0;font-size:13px;color:#52525b">
+      This report is for informational purposes only and does not constitute legal advice.
+      If you suspect fraud, contact your local consumer protection agency.
+    </p>
+    """
+    html = _BASE.format(subtitle="Analysis Report", body=body)
+    return subject, html
+
+
 def login_alert_email(ip: str) -> tuple[str, str]:
     subject = "New login to your RentalGuard account"
     body = f"""

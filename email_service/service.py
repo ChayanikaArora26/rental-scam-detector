@@ -12,6 +12,7 @@ import aiosmtplib
 
 from config import get_settings
 from email_service.templates import (
+    analysis_report_email,
     login_alert_email,
     password_reset_email,
     verification_email,
@@ -59,4 +60,9 @@ async def send_password_reset_email(to: str, token: str) -> None:
 
 async def send_login_alert(to: str, ip: str) -> None:
     subject, html = login_alert_email(ip)
+    await _send(to, subject, html)
+
+
+async def send_analysis_report(to: str, result: dict, llm_out: dict, filename: str) -> None:
+    subject, html = analysis_report_email(result, llm_out, filename)
     await _send(to, subject, html)

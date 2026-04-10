@@ -22,6 +22,16 @@ Public functions:
 
 import os
 import json
+from pathlib import Path
+
+# Load .env so ANTHROPIC_API_KEY is available even without shell export
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_env_path, override=False)
+    except ImportError:
+        pass
 
 # ── Provider selection ───────────────────────────────────────────
 _ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
