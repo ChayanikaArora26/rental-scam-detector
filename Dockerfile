@@ -7,10 +7,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install CPU-only PyTorch first (saves ~1GB vs default CUDA build)
-RUN pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
-
-# Install remaining Python deps (layer-cached)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

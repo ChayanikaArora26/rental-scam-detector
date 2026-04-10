@@ -35,7 +35,7 @@ import pdfplumber
 import pandas as pd
 import numpy as np
 from docx import Document
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from nltk.tokenize import sent_tokenize
 
 # ──────────────────────────────────────────────────────────────
@@ -53,8 +53,8 @@ PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 # Chunks scoring below this have no semantic match in any known-good lease.
 SUSPICION_THRESHOLD = 0.30
 
-# Sentence-transformer model (80MB, runs locally, no API key needed)
-EMBED_MODEL = "all-MiniLM-L6-v2"
+# Embedding model via fastembed (ONNX, no PyTorch, ~60MB)
+EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 EMBED_CACHE = pathlib.Path(__file__).parent / "data" / "processed" / "ref_embeddings.npy"
 
 # ──────────────────────────────────────────────────────────────
@@ -309,9 +309,8 @@ class RentalScamDetector:
     """
 
     def __init__(self, reference_texts: list[str]):
-        print(f"Loading sentence-transformer model ({EMBED_MODEL}) …",
-              end=" ", flush=True)
-        self.model = SentenceTransformer(EMBED_MODEL)
+        print(f"Loading embedding model ({EMBED_MODEL}) …", end=" ", flush=True)
+        self.model = TextEmbedding(EMBED_MODEL)
         print("done")
 
         if EMBED_CACHE.exists():
@@ -321,13 +320,10 @@ class RentalScamDetector:
         else:
             print(f"Encoding {len(reference_texts):,} reference texts "
                   f"(one-time, ~60 s on CPU) …")
-            self.ref_embeddings = self.model.encode(
-                reference_texts,
-                batch_size=64,
-                show_progress_bar=True,
-                normalize_embeddings=True,   # unit-norm → dot product = cosine sim
-                convert_to_numpy=True,
-            )
+            self.ref_embeddings = np.array(list(self.model.embed(reference_texts)))
+            # Normalise to unit vectors so dot product = cosine similarity
+            norms = np.linalg.norm(self.ref_embeddings, axis=1, keepdims=True)
+            self.ref_embeddings = self.ref_embeddings / np.maximum(norms, 1e-9)
             np.save(EMBED_CACHE, self.ref_embeddings)
             print(f"Embedding cache saved to {EMBED_CACHE}")
 
@@ -335,11 +331,9 @@ class RentalScamDetector:
         """Return a DataFrame with each chunk and its best semantic similarity score."""
         if not chunks:
             return pd.DataFrame()
-        query_embs = self.model.encode(
-            chunks,
-            normalize_embeddings=True,
-            convert_to_numpy=True,
-        )
+        query_embs = np.array(list(self.model.embed(chunks)))
+        norms = np.linalg.norm(query_embs, axis=1, keepdims=True)
+        query_embs = query_embs / np.maximum(norms, 1e-9)
         # Matrix multiply gives cosine similarity for unit-norm vectors
         sims = query_embs @ self.ref_embeddings.T   # shape: (n_chunks, n_ref)
         best_scores = sims.max(axis=1)
