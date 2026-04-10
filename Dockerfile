@@ -24,4 +24,4 @@ RUN mkdir -p data/cuad data/au_tenancy_forms data/processed
 EXPOSE 8000
 
 # Uvicorn — workers=1 keeps memory low on free tiers
-CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1
