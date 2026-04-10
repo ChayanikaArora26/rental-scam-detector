@@ -45,5 +45,4 @@ requests>=2.32
 beautifulsoup4>=4.12
 
 # ── Utilities ────────────────────────────────────────────────────
-streamlit>=1.35
 matplotlib>=3.8
