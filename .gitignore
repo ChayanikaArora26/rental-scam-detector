@@ -13,9 +13,11 @@ __pycache__/
 .env.*
 
 # Data files (regenerated at runtime)
-data/
-*.npy
-*.csv
+data/cuad/
+data/au_tenancy_forms/
+data/processed/last_analysis.csv
+*.db
+*.sqlite3
 
 # IDE
 .vscode/
