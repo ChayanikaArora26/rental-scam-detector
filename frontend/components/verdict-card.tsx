@@ -49,7 +49,8 @@ const RISK_CONFIG: Record<RiskLevel, {
 
 export function getRiskLevel(verdict: string): RiskLevel {
   const v = verdict.toUpperCase();
-  if (v.includes("HIGH")) return "HIGH";
+  if (v.includes("HIGH RISK")) return "HIGH";
+  if (v.includes("LOW-MEDIUM") || v.includes("LOW MEDIUM")) return "LOW";
   if (v.includes("MEDIUM")) return "MEDIUM";
   return "LOW";
 }

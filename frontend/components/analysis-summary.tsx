@@ -84,11 +84,6 @@ export function AnalysisSummary({ llm, result }: { llm: LLMResult; result: Analy
         </div>
       </div>
 
-      {!llm.powered_by_ai && (
-        <p className="text-xs text-zinc-600 pt-1">
-          💡 Set <code className="text-zinc-500 bg-white/[0.05] px-1 rounded">ANTHROPIC_API_KEY</code> on the backend to unlock Claude AI explanations.
-        </p>
-      )}
 
       {/* AI Chat */}
       <div className="mt-auto pt-3 border-t border-white/[0.06]">

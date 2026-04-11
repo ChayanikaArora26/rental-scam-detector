@@ -319,138 +319,147 @@ def _chat_hf(messages: list, context: dict | None, client=None) -> str:
 
 
 def _chat_fallback(messages: list, context: dict | None) -> str:
-    """Keyword-based fallback that tracks recent conversation context."""
+    """Keyword-based fallback for when no LLM provider is configured."""
     last = messages[-1]["content"].lower() if messages else ""
-    # Scan the last 5 messages (including current) for topic context
-    recent = " ".join(m["content"].lower() for m in messages[-5:])
 
-    # ── Topic detectors (recent context, not just last message) ──
-    _repair_ctx  = any(w in recent for w in ["repair", "maintenance", "fix", "broken", "mould", "mold", "hot water", "heater", "plumb"])
-    _bond_ctx    = any(w in recent for w in ["bond", "deposit", "security deposit"])
-    _evict_ctx   = any(w in recent for w in ["evict", "notice", "terminate", "end lease", "vacate"])
-    _entry_ctx   = any(w in recent for w in ["inspect", "entry", "enter", "access"])
-    _rent_ctx    = any(w in recent for w in ["rent increase", "rent rise", "raise rent", "increase rent"])
-    _scam_ctx    = any(w in recent for w in ["scam", "fraud", "fake", "western union", "crypto", "suspicious"])
+    # Only scan USER messages for context (bot replies pollute keyword detection)
+    user_recent = " ".join(
+        m["content"].lower() for m in messages[-6:] if m.get("role") == "user"
+    )
 
-    # Follow-up words that need context to answer
-    _followup    = any(w in last for w in ["pay", "cost", "charge", "who", "responsible", "liable",
-                                            "law", "legal", "right", "can they", "allowed", "have to",
-                                            "must", "need to", "yes", "no", "really", "how long",
-                                            "what if", "refuse", "won't", "wont", "ignored"])
+    def _has(*words) -> bool:
+        return any(w in last for w in words)
 
-    # ── Repair questions (including follow-ups) ───────────────────
-    if any(w in last for w in ["repair", "maintenance", "fix", "broken", "mould", "mold", "hot water", "heater"]) \
-       or (_followup and _repair_ctx):
-        pay_q = any(w in last for w in ["pay", "cost", "charge", "who", "responsible", "liable", "law", "legal", "have to", "must"])
-        refuse_q = any(w in last for w in ["refuse", "won't", "wont", "ignor", "not fix"])
-        if pay_q:
-            return (
-                "**Yes** — under the Residential Tenancies Act, landlords are legally required to keep the property in a reasonable state of repair. "
-                "They must cover repair costs unless the damage was caused by the tenant's negligence.\n\n"
-                "If your landlord refuses, you can:\n"
-                "• Send a written repair request (keeps a paper trail)\n"
-                "• Apply to **NCAT** for a repair order (NSW) or your state's tribunal\n"
-                "• For urgent repairs, arrange them yourself (up to 2 weeks rent) and claim costs back"
-            )
-        if refuse_q:
+    def _ctx(*words) -> bool:
+        return any(w in user_recent for w in words)
+
+    # ── Entry / inspection — check FIRST (before eviction/notice overlap) ──
+    if _has("entry", "enter", "entering", "access", "come in", "landlord come",
+            "inspect", "inspection", "notice to enter", "right to enter",
+            "without notice", "any time", "anytime", "turn up"):
+        return (
+            "In NSW, landlords must give **at least 24 hours written notice** before entering. "
+            "They can only enter for specific reasons (routine inspection, repairs, showing to buyers). "
+            "Routine inspections are limited to **4 times per year**. "
+            "You have the right to be present. Entry without notice — except genuine emergencies — "
+            "is illegal and can be reported to **NSW Fair Trading (13 32 20)**."
+        )
+
+    # ── Repairs ───────────────────────────────────────────────────
+    if _has("repair", "maintenance", "maintain", "fix", "broken", "mould", "mold",
+            "hot water", "heater", "plumb", "leak", "pest", "rodent") \
+       or (_ctx("repair", "maintenance", "fix", "broken") and _has("who", "pay", "cost", "responsible", "liable", "have to", "must", "refuse", "won't", "wont")):
+        if _has("refuse", "won't", "wont", "ignor", "not fix", "not respond"):
             return (
                 "If your landlord refuses to repair:\n"
                 "• Send a **written request** via email/letter — this is your evidence\n"
-                "• Give a reasonable timeframe (e.g. 7 days for non-urgent, immediate for urgent)\n"
-                "• If ignored, apply to **NCAT** (NSW) for a repair order — it's free and binding\n"
-                "• For urgent issues (no hot water, gas leak), you can arrange repairs yourself and reclaim costs"
+                "• Give a reasonable timeframe (7 days non-urgent, immediate for urgent)\n"
+                "• If ignored, apply to **NCAT** (NSW) for a repair order — free and binding\n"
+                "• For urgent issues (no hot water, gas leak), you can arrange repairs yourself and reclaim costs up to 2 weeks rent"
             )
         return (
             "Landlords must keep the property in reasonable repair under the Residential Tenancies Act. "
-            "For **urgent repairs** (burst pipe, no hot water, broken heater), you may arrange them yourself "
-            "(up to 2 weeks rent cost) if the landlord doesn't respond promptly. "
-            "Always document everything in writing and keep receipts."
+            "They pay for repairs unless you caused the damage.\n\n"
+            "For **urgent repairs** (burst pipe, no hot water, broken heater in winter):\n"
+            "• Contact landlord immediately in writing\n"
+            "• If no response, arrange the repair yourself (up to 2 weeks rent cost) and claim it back\n"
+            "• Always keep receipts and document everything in writing."
         )
 
-    # ── Bond questions ────────────────────────────────────────────
-    if any(w in last for w in ["bond", "deposit", "security deposit"]) \
-       or (_followup and _bond_ctx):
+    # ── Bond / deposit ────────────────────────────────────────────
+    if _has("bond", "deposit", "security deposit"):
         return (
             "In NSW, the maximum bond is **4 weeks rent**. Key rules:\n"
-            "• Landlord must lodge it with **NSW Fair Trading** within 10 days\n"
+            "• Landlord must lodge it with **NSW Fair Trading** within 10 working days\n"
             "• You get it back when you leave, minus any legitimate deductions\n"
             "• Never pay bond via cash, crypto, or wire transfer — use the official rental bond portal\n"
-            "• Disputes go to the **Rental Bond Board** or NCAT"
+            "• Disputes about deductions go to the **Rental Bond Board** or **NCAT**"
         )
 
-    # ── Scam questions ────────────────────────────────────────────
-    if any(w in last for w in ["scam", "fraud", "fake", "suspicious", "western union", "crypto", "bitcoin"]) \
-       or (_followup and _scam_ctx):
+    # ── Scams ─────────────────────────────────────────────────────
+    if _has("scam", "fraud", "fake", "suspicious", "western union", "crypto", "bitcoin",
+            "gift card", "wire transfer", "overseas landlord", "keys by post"):
         return (
-            "Common Australian rental scams:\n"
-            "• Wire-transfer bond requests before inspection\n"
-            "• Overseas landlord claiming to mail keys after payment\n"
-            "• Gumtree/Facebook listings at well below market rent\n"
-            "• WhatsApp-only contact, refusing video calls\n"
-            "• Pressure to pay immediately ('multiple applicants')\n\n"
-            "Report to NSW Fair Trading: **13 32 20** or your state equivalent."
+            "Common Australian rental scams to watch for:\n"
+            "• Bond or rent requested before you've inspected the property\n"
+            "• Overseas landlord who can't meet — keys sent by post after payment\n"
+            "• Payment via Western Union, gift cards, crypto, or wire transfer\n"
+            "• Listings well below market rent with pressure to act fast\n"
+            "• WhatsApp-only contact, refusing video calls or in-person viewing\n\n"
+            "If you suspect a scam: **do not pay anything** and report to "
+            "**NSW Fair Trading (13 32 20)** or **Scamwatch (scamwatch.gov.au)**."
         )
 
-    # ── Eviction / notice questions ───────────────────────────────
-    if any(w in last for w in ["evict", "eviction", "notice", "terminate", "end lease", "vacate"]) \
-       or (_followup and _evict_ctx):
+    # ── Eviction / termination ────────────────────────────────────
+    if _has("evict", "eviction", "terminate", "end lease", "vacate", "kicked out",
+            "end tenancy", "leave the property"):
         return (
-            "In NSW, a landlord must give written notice before terminating a tenancy:\n"
-            "• **No grounds** (end of fixed term): 90 days\n"
+            "In NSW, a landlord must give written notice before ending a tenancy:\n"
+            "• **End of fixed term (no grounds)**: 90 days\n"
             "• **Selling the property**: 30 days\n"
             "• **Breach of agreement**: 14 days\n\n"
-            "You cannot be evicted without a tribunal order if you dispute it. "
-            "Contact the **Tenants' Union of NSW** (02 8117 3700) for free advice."
+            "You cannot be physically removed without a **NCAT order** if you dispute it. "
+            "Contact the **Tenants' Union of NSW (02 8117 3700)** for free advice."
         )
 
-    # ── Rent increase questions ───────────────────────────────────
-    if any(w in last for w in ["rent increase", "rent rise", "raise rent", "increase rent", "put up rent"]) \
-       or (_followup and _rent_ctx):
+    # ── Rent increases ────────────────────────────────────────────
+    if _has("rent increase", "rent rise", "raise rent", "increase rent", "put up rent",
+            "rent going up", "higher rent", "rent hike"):
         return (
-            "In NSW, rent can only be increased **once every 12 months** with **60 days written notice**.\n\n"
-            "You can challenge an excessive increase at **NCAT** within 30 days of receiving the notice. "
-            "The tribunal will consider local market rents to decide if it's fair."
+            "In NSW, rent can only be increased **once every 12 months** and requires "
+            "**60 days written notice**.\n\n"
+            "If the increase seems excessive:\n"
+            "• Apply to **NCAT within 30 days** of receiving the notice\n"
+            "• The tribunal will compare your rent to local market rates\n"
+            "• You don't have to move out while disputing it"
         )
 
-    # ── Entry / inspection questions ──────────────────────────────
-    if any(w in last for w in ["inspect", "entry", "enter", "access", "landlord come"]) \
-       or (_followup and _entry_ctx):
-        return (
-            "In NSW, landlords must give **at least 24 hours written notice** before entering. "
-            "Routine inspections are limited to **4 times per year**. "
-            "You have the right to be present. Entry without notice (except emergencies) is illegal — "
-            "you can report it to NSW Fair Trading."
-        )
-
-    # ── Dispute / tribunal questions ──────────────────────────────
-    if any(w in last for w in ["fair trading", "ncat", "tribunal", "complaint", "dispute", "help", "who do i call"]):
+    # ── Tribunal / dispute ────────────────────────────────────────
+    if _has("fair trading", "ncat", "tribunal", "complaint", "dispute", "help",
+            "who do i call", "who should i contact", "where do i go"):
         return (
             "For tenancy disputes in NSW:\n"
-            "• **NSW Fair Trading** (13 32 20) — free mediation\n"
-            "• **NCAT** — binding tribunal decisions (apply at ncat.nsw.gov.au)\n"
-            "• **Tenants' Union of NSW** (02 8117 3700) — free legal advice\n\n"
-            "Other states: Consumer Affairs VIC (1300 55 81 81) · RTA QLD (1300 366 311)"
+            "• **NSW Fair Trading (13 32 20)** — free mediation, first step\n"
+            "• **NCAT (ncat.nsw.gov.au)** — binding tribunal decisions, low-cost\n"
+            "• **Tenants' Union of NSW (02 8117 3700)** — free legal advice\n\n"
+            "Other states:\n"
+            "• VIC: Consumer Affairs Victoria — 1300 55 81 81\n"
+            "• QLD: Residential Tenancies Authority — 1300 366 311\n"
+            "• WA: Department of Mines, Industry Regulation and Safety — 1300 304 054"
         )
 
-    # ── Context-aware generic follow-up ──────────────────────────
-    if _followup and context:
-        risk = context.get("combined_risk", 0)
-        n = context.get("n_flags", 0)
+    # ── Rights / what can landlord do ────────────────────────────
+    if _has("right", "rights", "allowed", "can they", "can landlord", "is it legal",
+            "illegal", "law", "legal"):
         return (
-            f"Based on the document analysis (risk **{risk}%**, {n} red flag(s)), "
-            "I'd recommend getting proper legal advice for this specific situation.\n\n"
-            "For AI-powered answers, set a free HuggingFace token:\n"
-            "`export HF_TOKEN=hf_...` (free at huggingface.co → Settings → Access Tokens)"
+            "As a tenant in Australia, your key rights include:\n"
+            "• **Quiet enjoyment** — landlord cannot enter without proper notice\n"
+            "• **Habitable property** — landlord must maintain it in good repair\n"
+            "• **Bond protection** — must be lodged with the government, not kept by landlord\n"
+            "• **Rent increase limits** — once per 12 months with 60 days notice (NSW)\n"
+            "• **No illegal eviction** — landlord needs a tribunal order to remove you\n\n"
+            "For your specific situation, contact **Tenants' Union of NSW (02 8117 3700)**."
+        )
+
+    # ── Generic follow-up with document context ───────────────────
+    if context and any(w in last for w in ["this", "document", "agreement", "lease", "listing", "it"]):
+        risk = context.get("combined_risk", 0)
+        flags = context.get("red_flags", [])
+        flag_list = "\n".join(f"• {rf['flag']}" for rf in flags[:5]) or "• None detected"
+        return (
+            f"Based on the analysed document (risk score: **{risk}%**):\n\n"
+            f"Red flags found:\n{flag_list}\n\n"
+            "For detailed legal advice on this specific document, consult the "
+            "**Tenants' Union of NSW (02 8117 3700)** — they offer free advice."
         )
 
     return (
-        "I can answer questions about:\n"
-        "• **Bond** limits and lodgement\n"
+        "I can help with Australian tenancy questions. Try asking about:\n"
+        "• **Bond** — limits, lodgement, getting it back\n"
         "• **Repairs** — who pays, what to do if landlord refuses\n"
-        "• **Eviction** notices and your rights\n"
-        "• **Rent increases** — limits and how to dispute\n"
-        "• **Entry** notice requirements\n"
-        "• **Scam** patterns to watch for\n\n"
-        "For full AI answers on any question, set a free HuggingFace token:\n"
-        "`export HF_TOKEN=hf_...` — get one at **huggingface.co → Settings → Access Tokens**"
+        "• **Entry** — notice requirements, how many inspections are allowed\n"
+        "• **Eviction** — notice periods and your rights\n"
+        "• **Rent increases** — limits and how to challenge them\n"
+        "• **Scams** — how to spot and report rental fraud\n"
+        "• **Your rights** as a tenant under Australian law"
     )
