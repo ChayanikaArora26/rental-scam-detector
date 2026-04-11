@@ -355,7 +355,10 @@ class RentalScamDetector:
         anomaly_pct = round(100 * n_anomalous / max(len(df), 1), 1)
 
         # Combined risk: severity-weighted flags dominate; anomaly adds up to 20 pts
+        # Floor: any triggered flag = at least 20% so users know it's worth attention
         combined_risk = min(100, flag_score + round(anomaly_pct * 0.4))
+        if n_flags > 0:
+            combined_risk = max(combined_risk, 20)
 
         # Verdict thresholds:
         #   CRITICAL flag alone = 50 pts → HIGH RISK

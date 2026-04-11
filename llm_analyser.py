@@ -33,36 +33,43 @@ if _env_path.exists():
     except ImportError:
         pass
 
-# ── Provider selection ───────────────────────────────────────────
-_ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-_HF_TOKEN      = os.environ.get("HF_TOKEN", "")
-
-_claude_client = None
-_hf_client     = None
-
-if _ANTHROPIC_KEY:
-    try:
-        import anthropic
-        _claude_client = anthropic.Anthropic(api_key=_ANTHROPIC_KEY)
-    except ImportError:
-        pass
-
-if not _claude_client and _HF_TOKEN:
-    try:
-        from huggingface_hub import InferenceClient
-        _hf_client = InferenceClient(token=_HF_TOKEN)
-    except ImportError:
-        pass
-
-PROVIDER = (
-    "claude"       if _claude_client else
-    "huggingface"  if _hf_client     else
-    "rule-based"
-)
-ENABLED = PROVIDER != "rule-based"
-
+# ── Provider selection (lazy — checked at call time, not import time) ───────
 CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 HF_MODEL     = "mistralai/Mistral-7B-Instruct-v0.3"
+
+def _make_claude_client():
+    key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    if not key:
+        return None
+    try:
+        import anthropic
+        return anthropic.Anthropic(api_key=key)
+    except ImportError:
+        return None
+
+def _make_hf_client():
+    token = os.environ.get("HF_TOKEN", "").strip()
+    if not token:
+        return None
+    try:
+        from huggingface_hub import InferenceClient
+        return InferenceClient(token=token)
+    except ImportError:
+        return None
+
+def _get_provider() -> tuple:
+    """Return (claude_client, hf_client, provider_name) — always re-reads env vars."""
+    claude = _make_claude_client()
+    if claude:
+        return claude, None, "claude"
+    hf = _make_hf_client()
+    if hf:
+        return None, hf, "huggingface"
+    return None, None, "rule-based"
+
+# Module-level names kept for /api/status — refreshed on each call below
+_claude_client, _hf_client, PROVIDER = _get_provider()
+ENABLED = PROVIDER != "rule-based"
 
 # ── Shared prompt builder ────────────────────────────────────────
 def _build_prompt(result: dict) -> str:
@@ -134,17 +141,20 @@ def explain(result: dict) -> dict:
         "provider":      str        — "claude" | "huggingface" | "rule-based"
     }
     """
-    if _claude_client:
-        return _explain_claude(result)
-    if _hf_client:
-        return _explain_hf(result)
+    claude, hf, _ = _get_provider()
+    if claude:
+        return _explain_claude(result, claude)
+    if hf:
+        return _explain_hf(result, hf)
     return _fallback(result)
 
 
 # ── Claude implementation ────────────────────────────────────────
-def _explain_claude(result: dict) -> dict:
+def _explain_claude(result: dict, client=None) -> dict:
+    if client is None:
+        client = _claude_client
     try:
-        msg = _claude_client.messages.create(
+        msg = client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=600,
             messages=[{"role": "user", "content": _build_prompt(result)}],
@@ -156,12 +166,14 @@ def _explain_claude(result: dict) -> dict:
 
 
 # ── HuggingFace implementation ───────────────────────────────────
-def _explain_hf(result: dict) -> dict:
+def _explain_hf(result: dict, client=None) -> dict:
+    if client is None:
+        client = _hf_client
     prompt = _build_prompt(result)
     # Mistral instruct format
     formatted = f"[INST] {prompt} [/INST]"
     try:
-        raw = _hf_client.text_generation(
+        raw = client.text_generation(
             formatted,
             model=HF_MODEL,
             max_new_tokens=500,
@@ -264,17 +276,20 @@ def chat(messages: list, context: dict | None = None) -> str:
     ───────
     str — the assistant's reply
     """
-    if _claude_client:
-        return _chat_claude(messages, context)
-    if _hf_client:
-        return _chat_hf(messages, context)
+    claude, hf, _ = _get_provider()
+    if claude:
+        return _chat_claude(messages, context, claude)
+    if hf:
+        return _chat_hf(messages, context, hf)
     return _chat_fallback(messages, context)
 
 
-def _chat_claude(messages: list, context: dict | None) -> str:
+def _chat_claude(messages: list, context: dict | None, client=None) -> str:
+    if client is None:
+        client = _claude_client
     try:
         system = _build_chat_system(context)
-        msg = _claude_client.messages.create(
+        msg = client.messages.create(
             model=CLAUDE_MODEL,
             max_tokens=800,
             system=system,
@@ -285,11 +300,13 @@ def _chat_claude(messages: list, context: dict | None) -> str:
         return f"Sorry, I hit an error talking to Claude: {e}"
 
 
-def _chat_hf(messages: list, context: dict | None) -> str:
+def _chat_hf(messages: list, context: dict | None, client=None) -> str:
+    if client is None:
+        client = _hf_client
     try:
         system = _build_chat_system(context)
         full_messages = [{"role": "system", "content": system}] + list(messages)
-        response = _hf_client.chat_completion(
+        response = client.chat_completion(
             model=HF_MODEL,
             messages=full_messages,
             max_tokens=600,

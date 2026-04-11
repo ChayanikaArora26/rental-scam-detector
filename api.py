@@ -143,10 +143,11 @@ def serve_frontend():
 
 @app.get("/api/status")
 def status():
+    _, _, provider = llm_analyser._get_provider()
     return {
         "ok":           True,
-        "llm_provider": llm_analyser.PROVIDER,
-        "llm_enabled":  llm_analyser.ENABLED,
+        "llm_provider": provider,
+        "llm_enabled":  provider != "rule-based",
         "version":      "2.0.0",
     }
 
